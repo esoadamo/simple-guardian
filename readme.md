@@ -3,9 +3,11 @@
 Last week I was too lazy to learn how to make working Fail2Ban filters, It appears too hard. So I decided to do something easier and more lightweight.
 ## Installation
 ### New
-```git clone https://github.com/esoadamo/simple-guardian.git
+```bash
+git clone https://github.com/esoadamo/simple-guardian.git
 cd simple-guardian
-sudo ./install.sh```
+sudo ./install.sh
+```
 Configuration file is located on ```/etc/simple-guardian/guardian.conf```
 Run it with ```simple-guarian --help``` 
 ### Update
