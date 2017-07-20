@@ -55,7 +55,7 @@ cp * $INSTALLATION_DIRECTORY
 check "Copying files to installation directory failed"
 
 echo "#!/bin/bash
-python3 $INSTALLATION_DIRECTORY/simple-guardian.py \"$@\"" > $EXEC_PATH
+python3 $INSTALLATION_DIRECTORY/simple-guardian.py \"\$@\"" > $EXEC_PATH
 check "Creating executable file ($EXEC_PATH) failed"
 
 chmod +x $EXEC_PATH
