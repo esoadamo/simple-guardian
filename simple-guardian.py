@@ -26,7 +26,7 @@ import os
 import sys
 from datetime import datetime
 import time
-from subprocess import call, PIPE
+from subprocess import call, PIPE, Popen
 
 version = "Aachenosaurus"
 
@@ -70,7 +70,7 @@ def config_parse():
             if profile is None:
                 continue
             if line.startswith('>>'):
-                PROFILES[profile]['filters'].append(line[2:])
+                PROFILES[profile]['filters'].append((profile, line[2:]))
                 continue
             if '=' not in line:
                 continue
@@ -138,8 +138,6 @@ def test_filter(filter_str: str, line: str, min_time=None):
 
 
 def main():
-    config_parse()
-
     try:
         if sys.argv[1] == '-h' or sys.argv[1] == '--help' or sys.argv[1] == '/?':
             print('Usage: ip-banner.py [max-relevant-time=86400] [--test-run] [--list-attack-only]')
@@ -149,6 +147,8 @@ def main():
             print('--no-email: disable sending email at the end')
             exit(0)
         max_age = int(sys.argv[1])
+        print('Searching for attacks since %s'
+              % datetime.fromtimestamp(time.time() - max_age).strftime('%d/%m/%y %H:%M:%S'))
     except (ValueError, IndexError):
         max_age = 24 * 3600  # one day
 
@@ -158,24 +158,31 @@ def main():
 
     min_relevant_time = time.time() - max_age
 
+    config_parse()
+
+    print('Profiles loaded: ', ', '.join(list(PROFILES.keys())))
+
     # Put all filters related to the same file on one place
     dict_file_filters = dict()  # file: list of filters
     for profile in PROFILES:
         if PROFILES[profile]['config']['LogFile'] not in dict_file_filters:
             dict_file_filters[PROFILES[profile]['config']['LogFile']] = list()
-        dict_file_filters[PROFILES[profile]['config']['LogFile']].extend((profile, PROFILES[profile]['filters']))
+        dict_file_filters[PROFILES[profile]['config']['LogFile']].extend(PROFILES[profile]['filters'])
 
     # Search all files for attacks
     vars_found = list()  # list of dictionaries with data about attack
     print('[Searching for attacks]')
-    for log_file, filters in dict_file_filters.items():   # filters is tuple: profile_name, filter_string
+    for log_file, filters in dict_file_filters.items():
         with open(log_file, 'rt') as f:
             lines = f.read().splitlines()
         for line in lines:
-            for filter_data in filters[1]:
-                filter_vars = test_filter(filter_data, line, min_relevant_time)
+            for filter_data in filters:  # tuple (profile_name, filter_string)
+                filter_vars = test_filter(filter_data[1], line, min_relevant_time)
                 if filter_vars:
-                    filter_vars['PROFILE'] = filters[0]
+                    if 'IP' in filter_vars and filter_vars['IP'] == '127.0.0.1':
+                        print('Skipping localhost')
+                        break
+                    filter_vars['PROFILE'] = filter_data[0]
                     vars_found.append(filter_vars)
                     print('#%d %s -> %s (%s)' % (len(vars_found),
                                                  filter_vars['IP'] if 'IP' in filter_vars else 'unknown',
@@ -198,34 +205,34 @@ def main():
     for filter_vars in vars_found:
         if 'IP' in filter_vars:
             dict_ip_attempts[filter_vars['IP']] = dict_ip_attempts.get(filter_vars['IP'], 0) + 1
-    blocked_ips = set()
+    blocked_ips = list()
     for ip, attempts_count in dict_ip_attempts.items():
         if attempts_count < GLOBAL_CONFIG['MaxAttempts']:
             continue
-        blocked_ips.add(ip)
+        blocked_ips.append(ip)
         print('#%d %s <- %d attempts' % (len(blocked_ips), ip, attempts_count))
         command = GLOBAL_CONFIG['BlockCommand'].replace('%IP%', ip)
         if test_run:
             print('TEST RUN: (not) executing "%s"' % command)
         else:
-            call(command, shell=True, stderr=PIPE, stdout=PIPE)
+            p = Popen(command, shell=True, stdout=PIPE)
+            p.wait()
+            if p.returncode != 0:
+                print('Failed to block %s' % ip)
 
     # Save list with blocked IPs
     if 'SaveBlocked' in GLOBAL_CONFIG and len(GLOBAL_CONFIG['SaveBlocked']) > 0:
-        blocked_ips_all = set().union(blocked_ips)
         if test_run:
             print('TEST RUN: (not) saving list of blocked IPs into %s' % GLOBAL_CONFIG['SaveBlocked'])
         else:
-            with open(GLOBAL_CONFIG['SaveBlocked'], 'a+') as f:
-                lines = f.read().splitlines()
-                for line in lines:
-                    if len(line) == '0':
-                        continue
-                    blocked_ips_all.add(line)
-                if len(blocked_ips_all) != len(blocked_ips):  # Save only if file was modified
-                    f.seek(0)
-                    f.write('\n'.join(blocked_ips_all))
-                    f.truncate()
+            saved_ips = set()
+            if os.path.isfile(GLOBAL_CONFIG['SaveBlocked']):
+                with open(GLOBAL_CONFIG['SaveBlocked'], 'rt') as f:
+                    saved_ips = set(f.read().splitlines())
+            if set(blocked_ips) != saved_ips:  # something has changed
+                with open(GLOBAL_CONFIG['SaveBlocked'], 'at') as f:
+                    diff = list(set(blocked_ips) - saved_ips)
+                    f.write('\n'.join(diff)+'\n')
 
     # Send info mail
     if no_mail\
@@ -244,8 +251,10 @@ def main():
         mail_lines.append('%s <- %d attempts' % (ip, attempts_count))
     mail_lines.append('[All attacks]')
     for filter_vars in vars_found:
-        mail_lines.append('%s -> %s' % (filter_vars['IP'] if 'IP' in filter_vars else 'unknown',
-                                        filter_vars['USER'] if 'USER' in filter_vars else 'unknown'))
+        mail_lines.append('%s -> %s (%s)' % (
+            filter_vars['IP'] if 'IP' in filter_vars else 'unknown',
+            filter_vars['USER'] if 'USER' in filter_vars else 'unknown',
+            filter_vars['PROFILE']))
 
     command = GLOBAL_CONFIG['MailCommand'].replace('%SUBJECT%', mail_subject)\
         .replace('%TARGET_MAIL%', GLOBAL_CONFIG['SendMail'])\
