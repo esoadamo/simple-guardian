@@ -28,7 +28,7 @@ from datetime import datetime
 import time
 from subprocess import call, PIPE, Popen
 
-version = "Aachenosaurus"
+version = "Abelisaurus"
 
 CONFIG_PATH = __file__[:-len(os.path.basename(__file__))] + 'guardian.conf'
 
@@ -41,6 +41,9 @@ def config_parse():
     Parses config from CONFIG_PATH file
     :return: None, everything is saved into global PROFILES dict
     """
+    if not os.path.isfile(CONFIG_PATH):
+        print('Error: config file "%s" does not exist' % CONFIG_PATH)
+        exit(1)
     with open(CONFIG_PATH, 'rt') as f:
         lines = f.read().splitlines()
     config_part = "NOWHERE"
@@ -140,11 +143,12 @@ def test_filter(filter_str: str, line: str, min_time=None):
 def main():
     try:
         if sys.argv[1] == '-h' or sys.argv[1] == '--help' or sys.argv[1] == '/?':
-            print('Usage: ip-banner.py [max-relevant-time=86400] [--test-run] [--list-attack-only]')
+            print('Usage: ip-banner.py [max-relevant-time=86400] [--test-run] [--list-attack-only] [-c config_file]')
             print('max-relevant-time: number of seconds until log entries are supposed to be old, set to -1 to disable')
             print('--test-run: says not send emails or apply blocking or write to any file. Just print to console.')
             print('--list-attacks-only: just list attacks and exit')
             print('--no-email: disable sending email at the end')
+            print('-c config_file: uses config file from another than default location')
             exit(0)
         max_age = int(sys.argv[1])
         print('Searching for attacks since %s'
@@ -157,6 +161,14 @@ def main():
     no_mail = '--no-email' in sys.argv
 
     min_relevant_time = time.time() - max_age
+
+    if '-c' in sys.argv:
+        global CONFIG_PATH
+        try:
+            CONFIG_PATH = sys.argv[sys.argv.index('-c') + 1]
+        except IndexError:
+            print('Error: You must specify a path to the config file with -c parameter')
+            exit(1)
 
     config_parse()
 
@@ -225,14 +237,16 @@ def main():
         if test_run:
             print('TEST RUN: (not) saving list of blocked IPs into %s' % GLOBAL_CONFIG['SaveBlocked'])
         else:
-            saved_ips = set()
+            block_all = set()
             if os.path.isfile(GLOBAL_CONFIG['SaveBlocked']):
                 with open(GLOBAL_CONFIG['SaveBlocked'], 'rt') as f:
-                    saved_ips = set(f.read().splitlines())
-            if set(blocked_ips) != saved_ips:  # something has changed
-                with open(GLOBAL_CONFIG['SaveBlocked'], 'at') as f:
-                    diff = list(set(blocked_ips) - saved_ips)
-                    f.write('\n'.join(diff)+'\n')
+                    blocked_lines = f.read().splitlines()
+                    for blocked_line in blocked_lines:
+                        if len(blocked_line) > 0:
+                            block_all.add(blocked_line)
+            if set(blocked_ips) != block_all and len(blocked_ips) > 0:  # something has changed
+                with open(GLOBAL_CONFIG['SaveBlocked'], 'wt') as f:
+                    f.write('\n'.join(list(block_all))+'\n')
 
     # Send info mail
     if no_mail\
