@@ -237,16 +237,14 @@ def main():
         if test_run:
             print('TEST RUN: (not) saving list of blocked IPs into %s' % GLOBAL_CONFIG['SaveBlocked'])
         else:
-            block_all = set()
+            blocked_saved = set()  # set of blocked IPs loaded from config file
             if os.path.isfile(GLOBAL_CONFIG['SaveBlocked']):
                 with open(GLOBAL_CONFIG['SaveBlocked'], 'rt') as f:
-                    blocked_lines = f.read().splitlines()
-                    for blocked_line in blocked_lines:
-                        if len(blocked_line) > 0:
-                            block_all.add(blocked_line)
-            if set(blocked_ips) != block_all and len(blocked_ips) > 0:  # something has changed
-                with open(GLOBAL_CONFIG['SaveBlocked'], 'wt') as f:
-                    f.write('\n'.join(list(block_all))+'\n')
+                    blocked_saved = set(f.read().splitlines())
+            blocked_new = blocked_saved - set(blocked_ips)
+            if len(blocked_new) > 0:  # something has changed
+                with open(GLOBAL_CONFIG['SaveBlocked'], 'at') as f:
+                    f.write('\n'.join(list(blocked_new))+'\n')
 
     # Send info mail
     if no_mail\
