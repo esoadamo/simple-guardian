@@ -241,7 +241,7 @@ def main():
             if os.path.isfile(GLOBAL_CONFIG['SaveBlocked']):
                 with open(GLOBAL_CONFIG['SaveBlocked'], 'rt') as f:
                     blocked_saved = set(f.read().splitlines())
-            blocked_new = blocked_saved - set(blocked_ips)
+            blocked_new = set(blocked_ips) - blocked_saved
             if len(blocked_new) > 0:  # something has changed
                 with open(GLOBAL_CONFIG['SaveBlocked'], 'at') as f:
                     f.write('\n'.join(list(blocked_new))+'\n')
