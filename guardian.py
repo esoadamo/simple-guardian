@@ -3,6 +3,14 @@ import time
 from datetime import datetime
 
 
+def remove_whitespaces(string: str):
+    while string[0].isspace():
+        string = string[1:]
+    while string[-1].isspace():
+        string = string[:-1]
+    return string
+
+
 class LogParser:
     def __init__(self, file_log: str, rules: list, service_name=None):
         self.file_log = file_log
@@ -36,11 +44,11 @@ class LogParser:
                 attacks_in_time_range = []
                 for attack2 in attack_list:
                     attack_time_delta = attack2['TIMESTAMP'] - attack['TIMESTAMP']
-                    if 0 < attack_time_delta <= attack_attemps_time:
+                    if 0 <= attack_time_delta <= attack_attemps_time:
                         attacks_in_time_range.append(attack2)
                         if len(attacks_in_time_range) > min_attack_attemps:
                             break
-                if len(attacks_in_time_range) > min_attack_attemps:
+                if len(attacks_in_time_range) >= min_attack_attemps:
                     habitual_offenders[ip] = attack_list
 
         return habitual_offenders
@@ -75,7 +83,7 @@ class Rule:
             return None
         # noinspection PyTypeChecker
         for i, variable in enumerate(self.__rule_variables):
-            data[variable] = variable_search.group(i + 1)
+            data[variable] = remove_whitespaces(variable_search.group(i + 1))
 
         if self.__service_name is not None:
             data['SERVICE'] = self.__service_name
@@ -97,10 +105,10 @@ class Rule:
 
 
 if __name__ == '__main__':
-    all_rules = ["Aug 2 12:09:02 %IP% attacked on user %USER%"]
+    all_rules = ["%D:M% %D:D% %TIME% %IP% attacked on user %USER%"]
     file = 'auth.log'
 
     parser = LogParser(file, all_rules)
-    offenders = parser.parse_attacks()
+    offenders = parser.get_habitual_offenders(3, 100000)
     for off_ip, off_attacks in offenders.items():
-        print(off_ip + ':', len(off_attacks))
+        print(off_ip + ':', off_attacks)
