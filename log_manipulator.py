@@ -35,8 +35,9 @@ class LogParser:
 
         return attacks
 
-    def get_habitual_offenders(self, min_attack_attempts: int, attack_attempts_time: int, max_age=None) -> dict:
-        attacks = self.parse_attacks(max_age)
+    def get_habitual_offenders(self, min_attack_attempts: int, attack_attempts_time: int, max_age=None, attacks=None) \
+            -> dict:
+        attacks = self.parse_attacks(max_age) if attacks is None else attacks
         habitual_offenders = {}
 
         for ip, attack_list in attacks.items():
@@ -106,7 +107,7 @@ class Rule:
 
 if __name__ == '__main__':
     all_rules = ["%D:M% %D:D% %TIME% %IP% attacked on user %USER%"]
-    file = 'auth.log'
+    file = 'debug.log'
 
     parser = LogParser(file, all_rules)
     offenders = parser.get_habitual_offenders(3, 100000)
