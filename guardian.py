@@ -1,97 +1,106 @@
+import re
 import time
 from datetime import datetime
 
 
 class LogParser:
-    def __init__(self, file_log: str, rules: list):
+    def __init__(self, file_log: str, rules: list, service_name=None):
         self.file_log = file_log
-        self.rules = rules
+        self.rules = [rule if type(rule) == Rule else Rule(rule, service_name) for rule in rules]
 
-    def parse_attacks(self) -> dict:
+    def parse_attacks(self, max_age=None) -> dict:
         attacks = {}
         with open(self.file_log, 'r') as f:
             log_lines = f.read().splitlines()
         for log_line in log_lines:
             for rule in self.rules:
-                filter_result = LogParser.test_filter_on_line(rule, log_line)
-                if filter_result:
-                    item = attacks.get(filter_result['IP'], [])
-                    item.append(filter_result['TIMESTAMP'])
-                    attacks[filter_result['IP']] = item
+                variables = rule.get_variables(log_line)
+                if variables is not None:
+                    if max_age is not None and time.time() - max_age > variables['TIMESTAMP']:
+                        break
+                    attacker_ip = variables['IP']
+                    del variables['IP']
+                    item = attacks.get(attacker_ip, [])
+                    item.append(variables)
+                    attacks[attacker_ip] = item
                     break
 
         return attacks
 
-    @staticmethod
-    def test_filter_on_line(filter_line: str, log_line: str, min_time=None):
-        """
-        Tests a filter on some line
+    def get_habitual_offenders(self, min_attack_attemps: int, attack_attemps_time: int, max_age=None) -> dict:
+        attacks = self.parse_attacks(max_age)
+        habitual_offenders = {}
 
-        :param filter_line: filter used on the log_line
-        :param log_line: log_line itself
-        :param min_time: minimal time (time.time) that still counts as relevant attack
-        :return: dictionary with found variables if filter succeed, otherwise False
-        """
-        while '  ' in log_line:
-            log_line = log_line.replace('  ', ' ')
-        ls = log_line.split(' ')
-        fs = filter_line.split(' ')
+        for ip, attack_list in attacks.items():
+            for attack in attack_list:
+                attacks_in_time_range = []
+                for attack2 in attack_list:
+                    attack_time_delta = attack2['TIMESTAMP'] - attack['TIMESTAMP']
+                    if 0 < attack_time_delta <= attack_attemps_time:
+                        attacks_in_time_range.append(attack2)
+                        if len(attacks_in_time_range) > min_attack_attemps:
+                            break
+                if len(attacks_in_time_range) > min_attack_attemps:
+                    habitual_offenders[ip] = attack_list
 
-        filter_vars = {
-            'IP': None,
-            'TIMESTAMP': None,
-            'USER': None
-        }
-        if len(ls) != len(fs):
-            return False
+        return habitual_offenders
 
-        for i in range(len(ls)):
-            if fs[i].count('%') == 2:
-                var_start = fs[i].index('%')
-                var_stop = -1 * (len(fs[i]) - fs[i].index('%', var_start + 1))
-                var_name = fs[i][var_start + 1:var_stop]
-                var_val_stop = var_stop + 1 if var_stop < -1 else len(ls[i])
-                var_val = ls[i][var_start:var_val_stop]
-                filter_vars[var_name] = var_val
-        filter_check = filter_line
-        for k, v in filter_vars.items():
-            if v is None:
-                continue
-            # noinspection PyTypeChecker
-            filter_check = filter_check.replace('%' + k + '%', v)
-        if not filter_check == log_line:
-            return False
 
-        # check if the log is not old
+class Rule:
+    def __init__(self, filter_string: str, service_name=None):
+        self.__service_name = service_name
+        self.__rule_variables = re.findall("%.*?%", filter_string)
+
+        # Generate regex for rule detection
+        self.__rule_regex = filter_string
+        for reserved_char in list("\\+*?^$.[]{}()|/"):  # escape reserved regex characters
+            self.__rule_regex = self.__rule_regex.replace(reserved_char, '\\' + reserved_char)
+        for variable in self.__rule_variables:  # replace all variables with any regex characters
+            self.__rule_regex = self.__rule_regex.replace(variable, '(.+?)')
+        if self.__rule_regex.endswith('?)'):  # disable lazy search for last variables so they are found whole
+            self.__rule_regex = self.__rule_regex[:-2] + ')'
+
+        # Remove %'s from variable names
+        self.__rule_variables = [var[1:-1] for var in self.__rule_variables]
+
+    def test(self, log_line: str) -> bool:
+        return True if re.match(self.__rule_regex, log_line) else False
+
+    def get_variables(self, log_line):
+        data = {}
+
+        # Parse all variables from log line
+        variable_search = re.match(self.__rule_regex, log_line)
+        if not variable_search:  # this rule is not for this line
+            return None
+        # noinspection PyTypeChecker
+        for i, variable in enumerate(self.__rule_variables):
+            data[variable] = variable_search.group(i + 1)
+
+        if self.__service_name is not None:
+            data['SERVICE'] = self.__service_name
+
         date_format = '%Y %b %d %H:%M:%S'
-        if 'D:M' in filter_vars and 'D:D' in filter_vars and 'TIME' in filter_vars:
-            date_string = '%s %s %s %s' % (datetime.now().strftime('%Y'), filter_vars['D:M'],
-                                           filter_vars['D:D'], filter_vars['TIME'])
-        elif 'D:M' in filter_vars and 'D:D' in filter_vars:
-            date_string = '%s %s %s 00:00:00' % (datetime.now().strftime('%Y'), filter_vars['D:M'], filter_vars['D:D'])
-        elif 'TIME' in filter_vars:
+        date_string = None
+        if 'D:M' in data and 'D:D' in data and 'TIME' in data:
+            date_string = '%s %s %s %s' % (datetime.now().strftime('%Y'), data['D:M'],
+                                           data['D:D'], data['TIME'])
+        elif 'D:M' in data and 'D:D' in data:
+            date_string = '%s %s %s 00:00:00' % (datetime.now().strftime('%Y'), data['D:M'], data['D:D'])
+        elif 'TIME' in data:
             # noinspection PyTypeChecker
-            date_string = datetime.now().strftime('%Y %b %d') + ' ' + filter_vars['TIME']
-        else:
-            filter_vars['TIMESTAMP'] = time.time()  # we do not know the attack time, so we suggest it happened now
-            return filter_vars
+            date_string = datetime.now().strftime('%Y %b %d') + ' ' + data['TIME']
 
-        attack_time = time.mktime(datetime.strptime(date_string, date_format).timetuple())
-        if min_time is not None and attack_time < min_time:
-            return False
-
-        filter_vars['TIMESTAMP'] = attack_time
-
-        return filter_vars
+        data['TIMESTAMP'] = time.time() if date_string is None else \
+            time.mktime(datetime.strptime(date_string, date_format).timetuple())
+        return data
 
 
 if __name__ == '__main__':
-    all_rules = [
-        "%D:M% %D:D% %TIME% %HOSTNAME% sshd[%PID%]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=%IP% user=%USER%",
-        "%D:M% %D:D% %TIME% %HOSTNAME% sshd[%PID%]: error: PAM: Authentication failure for %USER% from %IP%",
-        "%D:M% %D:D% %TIME% %HOSTNAME% sshd[%PID%]: Postponed keyboard-interactive for invalid user %USER% from %IP% port %PORT% ssh2 [preauth]",
-        "%D:M% %D:D% %TIME% %HOSTNAME% sshd[%PID%]: Failed keyboard-interactive/pam for invalid user %USER% from %IP% port %PORT% ssh2",
-        "%D:M% %D:D% %TIME% %HOSTNAME% sshd[%PID%]: error: maximum authentication attempts exceeded for invalid user %USER% from %IP% port %PORT% ssh2 [preauth]"]
+    all_rules = ["Aug 2 12:09:02 %IP% attacked on user %USER%"]
     file = 'auth.log'
+
     parser = LogParser(file, all_rules)
-    print(len(parser.parse_attacks()))
+    offenders = parser.parse_attacks()
+    for off_ip, off_attacks in offenders.items():
+        print(off_ip + ':', len(off_attacks))
