@@ -35,7 +35,7 @@ class LogParser:
 
         return attacks
 
-    def get_habitual_offenders(self, min_attack_attemps: int, attack_attemps_time: int, max_age=None) -> dict:
+    def get_habitual_offenders(self, min_attack_attempts: int, attack_attempts_time: int, max_age=None) -> dict:
         attacks = self.parse_attacks(max_age)
         habitual_offenders = {}
 
@@ -44,11 +44,11 @@ class LogParser:
                 attacks_in_time_range = []
                 for attack2 in attack_list:
                     attack_time_delta = attack2['TIMESTAMP'] - attack['TIMESTAMP']
-                    if 0 <= attack_time_delta <= attack_attemps_time:
+                    if 0 <= attack_time_delta <= attack_attempts_time:
                         attacks_in_time_range.append(attack2)
-                        if len(attacks_in_time_range) > min_attack_attemps:
+                        if len(attacks_in_time_range) > min_attack_attempts:
                             break
-                if len(attacks_in_time_range) >= min_attack_attemps:
+                if len(attacks_in_time_range) >= min_attack_attempts:
                     habitual_offenders[ip] = attack_list
 
         return habitual_offenders
