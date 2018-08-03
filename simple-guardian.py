@@ -62,6 +62,15 @@ class ThreadScanner(Thread):
                             self.db.execute('INSERT INTO `attacks`(`time`,`ip`,`data`) VALUES (?,?,?);',
                                             (attack_data['TIMESTAMP'], ip, json.dumps(attack_data)))
                             commit_db = True
+
+                offenders = parser.get_habitual_offenders(profile_data['maxAttempts'], profile_data['scanRange'],
+                                                          attacks=attacks)
+                for offender_ip in offenders.keys():
+                    if list(self.db.execute('SELECT COUNT(*) FROM bans WHERE ip = ?',
+                                            (offender_ip,)))[0][0] == 0:
+                        self.db.execute('INSERT INTO `bans`(`time`,`ip`) VALUES (?,?);',
+                                        (time.time(), offender_ip))
+                        commit_db = True
             if commit_db:
                 self.db.commit()
             ThreadScanner.sleep_while_running(CONFIG['scanTime'])
