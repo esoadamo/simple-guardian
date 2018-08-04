@@ -2,9 +2,10 @@
 import json
 import os
 import sqlite3
-import time
 from queue import Queue
 from threading import Thread, Lock
+
+import time
 
 import log_manipulator
 
@@ -12,6 +13,7 @@ CONFIG_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.par
 PROFILES_DIR = os.path.join(CONFIG_DIR, 'profiles')
 CONFIG = {}
 PROFILES = {}
+PROFILES_LOCK = Lock()
 
 
 class Database:
@@ -86,7 +88,10 @@ class ThreadScanner(Thread):
         while AppRunning.is_running():
             print('Scanning')
             commit_db = False
-            for profile, profile_data in PROFILES.items():
+            PROFILES_LOCK.acquire()
+            profiles_copy = dict(PROFILES)
+            PROFILES_LOCK.release()
+            for profile, profile_data in profiles_copy.items():
                 parser = log_manipulator.LogParser(profile_data['logFile'], profile_data['filters'])
                 attacks = parser.parse_attacks(max_age=profile_data['scanRange'] * 2)
                 known_attack_timestamps = []
@@ -115,13 +120,8 @@ class ThreadScanner(Thread):
             AppRunning.sleep_while_running(CONFIG['scanTime'])
 
 
-def main():
-    # Load global configs
-    with open(os.path.join(CONFIG_DIR, 'config.json'), 'r') as f:
-        CONFIG.update(json.load(f))
-
-    # Load all profiles
-    print('Loading profiles')
+def load_profiles():
+    PROFILES_LOCK.acquire()
     if not os.path.exists(PROFILES_DIR):
         os.makedirs(PROFILES_DIR)
     else:
@@ -139,6 +139,17 @@ def main():
                     if profile not in PROFILES:
                         PROFILES[profile] = dict(CONFIG['defaults'])
                     PROFILES[profile].update(profile_data)
+    PROFILES_LOCK.release()
+
+
+def main():
+    # Load global configs
+    with open(os.path.join(CONFIG_DIR, 'config.json'), 'r') as f:
+        CONFIG.update(json.load(f))
+
+    # Load all profiles
+    print('Loading profiles')
+    load_profiles()
     print('Profiles loaded')
 
     Database.init(os.path.join(CONFIG_DIR, 'db.db'))
