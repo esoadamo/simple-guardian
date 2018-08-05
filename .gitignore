@@ -1,5 +1,6 @@
 .idea/
-venv/
+venv*
 data/profiles/
 data/db.db
 *.log
+__pycache__/
