@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
+import base64
 import json
 import os
 import sqlite3
+import zlib
+from binascii import Error as binasciiError
 from queue import Queue
 from threading import Thread, Lock
 
+import requests
 import time
 
 import log_manipulator
@@ -140,6 +144,30 @@ def load_profiles():
                         PROFILES[profile] = dict(CONFIG['defaults'])
                     PROFILES[profile].update(profile_data)
     PROFILES_LOCK.release()
+
+
+def login_with_server(secret: str):
+    try:
+        data = json.loads(zlib.decompress(base64.b64decode(secret.encode('ascii'))).decode('utf8'))
+    except binasciiError or json.JSONDecodeError:
+        return False, 'Unusable login key'
+
+    try:
+        if requests.get(data['server'] + '/api/serviceName').text != 'simple-guardian-server':
+            return False, '"%s" is not a simple-guardian server' % data['server']
+    except requests.exceptions.ConnectionError:
+        return False, 'server "%s" is unreachable' % data['server']
+    return True, 'Logged in'
+
+
+def generate_secret():  # TODO move to the server side
+    data = {
+        'server': 'http://127.0.0.1',
+        'user': 'me',
+        'device-id': 'my-device',
+    }
+    data = json.dumps(data)
+    return base64.b64encode(zlib.compress(data.encode('utf8'))).decode('ascii')
 
 
 def main():
