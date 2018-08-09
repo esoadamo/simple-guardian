@@ -1,8 +1,8 @@
 {
-  "scanTime": 30,
-  "defaults": {
-    "scanRange": 600,
-    "maxAttempts": 5,
-    "banCommand": "/sbin/iptables -I INPUT -s %IP% -j DROP"
-  }
+ "scanTime": 30,
+ "defaults": {
+  "scanRange": 600,
+  "maxAttempts": 5,
+  "banCommand": "/sbin/iptables -I INPUT -s %IP% -j DROP"
+ }
 }

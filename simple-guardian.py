@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-import base64
 import json
 import os
 import sqlite3
-import zlib
-from binascii import Error as binasciiError
+import sys
+import time
 from queue import Queue
 from threading import Thread, Lock
 
 import requests
-import time
 
 import log_manipulator
+from http_socket_client import HSocket
 
 CONFIG_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir, 'data'))
 PROFILES_DIR = os.path.join(CONFIG_DIR, 'profiles')
 CONFIG = {}
+ONLINE_DATA = {'loggedIn': False}
 PROFILES = {}
 PROFILES_LOCK = Lock()
 
@@ -146,34 +146,53 @@ def load_profiles():
     PROFILES_LOCK.release()
 
 
-def login_with_server(secret: str):
+def login_with_server(url: str):
     try:
-        data = json.loads(zlib.decompress(base64.b64decode(secret.encode('ascii'))).decode('utf8'))
-    except binasciiError or json.JSONDecodeError:
-        return False, 'Unusable login key'
-
-    try:
-        if requests.get(data['server'] + '/api/serviceName').text != 'simple-guardian-server':
-            return False, '"%s" is not a simple-guardian server' % data['server']
+        server_data = requests.get(url).json()
     except requests.exceptions.ConnectionError:
-        return False, 'server "%s" is unreachable' % data['server']
+        return False, 'cannot login, server is unreachable'
+    except json.JSONDecodeError:
+        return False, 'server returned unusable answer'
+    ONLINE_DATA.update(server_data)
+    ONLINE_DATA['loggedIn'] = True
+    with open(os.path.join(CONFIG_DIR, 'server.json'), 'w') as f:
+        json.dump(ONLINE_DATA, f, indent=1)
     return True, 'Logged in'
 
 
-def generate_secret():  # TODO move to the server side
-    data = {
-        'server': 'http://127.0.0.1',
-        'user': 'me',
-        'device-id': 'my-device',
-    }
-    data = json.dumps(data)
-    return base64.b64encode(zlib.compress(data.encode('utf8'))).decode('ascii')
+def init_online():
+    socket = HSocket(ONLINE_DATA['server_url'], auto_connect=False)
+
+    def connect():
+        socket.emit('login', json.dumps({'uid': ONLINE_DATA['device_id'], 'secret': ONLINE_DATA['device_secret']}))
+
+    def login(ok):
+        if not ok:
+            print('login with server seems expired, please fix this')
+            return
+        print('login ok')
+
+    print('login online')
+    socket.on('connect', connect)
+    socket.on('login', login)
+    socket.connect()
 
 
 def main():
     # Load global configs
     with open(os.path.join(CONFIG_DIR, 'config.json'), 'r') as f:
         CONFIG.update(json.load(f))
+
+    if 'login' in sys.argv:
+        print(login_with_server(sys.argv[sys.argv.index('login') + 1])[1])
+        exit()
+
+    # Load online config
+    if os.path.isfile(os.path.join(CONFIG_DIR, 'server.json')):
+        with open(os.path.join(CONFIG_DIR, 'server.json'), 'r') as f:
+            ONLINE_DATA.update(json.load(f))
+        if ONLINE_DATA['loggedIn']:
+            init_online()
 
     # Load all profiles
     print('Loading profiles')

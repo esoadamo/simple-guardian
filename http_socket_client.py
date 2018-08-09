@@ -1,8 +1,8 @@
 import json
+import time
 from threading import Thread
 
 import requests
-import time
 
 
 class HSocket:
@@ -54,7 +54,12 @@ class HSocket:
         self.sid = None
 
         if self.connected:
-            requests.post(self.host + '/hsocket/', params={'sid': self.sid}, data={'action': 'disconnect'})
+            try:
+                requests.post(self.host + '/hsocket/', params={'sid': self.sid}, data={'action': 'disconnect'},
+                              timeout=5)
+            except requests.exceptions.ConnectionError or requests.exceptions.ConnectTimeout \
+                   or requests.exceptions.ReadTimeout:
+                pass
             self.connected = False
             self._run_listener('disconnect')
 
@@ -81,8 +86,13 @@ class HSocket:
 
     def _get_message(self) -> dict:
         try:
-            return requests.get(self.host + '/hsocket/', params=None if self.sid is None else {'sid': self.sid},
-                                timeout=10).json()
+            while True:
+                data = requests.get(self.host + '/hsocket/', params=None if self.sid is None else {'sid': self.sid},
+                                    timeout=10).json()
+                if data['action'] != 'retry':
+                    break
+                time.sleep(10)
+            return data
         except requests.exceptions.ConnectionError:
             self.disconnect(reconnect=True)
         except json.decoder.JSONDecodeError:

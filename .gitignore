@@ -4,3 +4,4 @@ data/profiles/
 data/db.db
 *.log
 __pycache__/
+data/server.json
