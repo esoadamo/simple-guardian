@@ -105,10 +105,12 @@ class ThreadScanner(Thread):
                             attack_data['TIMESTAMP'] += 1
                         known_attack_timestamps.append(attack_data['TIMESTAMP'])
                         attacks[ip][i].update(attack_data)
-                        if Database.execute('SELECT COUNT(*) FROM attacks WHERE ip = ? AND time = ?',
-                                            (ip, attack_data['TIMESTAMP']))[0][0] == 0:
-                            Database.execute('INSERT INTO `attacks`(`time`,`ip`,`data`) VALUES (?,?,?);',
-                                             (attack_data['TIMESTAMP'], ip, json.dumps(attack_data)))
+                        if Database.execute('SELECT COUNT(*) FROM attacks WHERE ip = ? AND time = ? AND profile = ?',
+                                            (ip, attack_data['TIMESTAMP'], profile))[0][0] == 0:
+                            Database.execute('INSERT INTO `attacks`(`time`,`ip`,`data`,`profile`,`user`) '
+                                             'VALUES (?,?,?,?,?);',
+                                             (attack_data['TIMESTAMP'], ip, json.dumps(attack_data), profile,
+                                              attack_data['USER'] if 'USER' in attack_data else None))
                             commit_db = True
 
                 offenders = parser.get_habitual_offenders(profile_data['maxAttempts'], profile_data['scanRange'],
@@ -172,7 +174,6 @@ def init_online():
             return
         print('login ok')
 
-    print('login online')
     socket.on('connect', connect)
     socket.on('login', login)
     socket.connect()
