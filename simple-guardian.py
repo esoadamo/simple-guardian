@@ -126,6 +126,18 @@ class ThreadScanner(Thread):
             AppRunning.sleep_while_running(CONFIG['scanTime'])
 
 
+def list_attacks(before=None, max_limit=None):
+    sql = 'SELECT * FROM attacks'
+    if before is not None:
+        sql += ' WHERE time <= ?'
+    if max_limit is not None:
+        sql += ' LIMIT ' + str(max_limit)
+    columns = [column_data[1] for column_data in Database.execute("PRAGMA table_info(attacks)")]
+    records = Database.execute(sql, (before,) if before is not None else ())
+
+    return [{columns[i]: value for i, value in enumerate(record)} for record in records]
+
+
 def load_profiles():
     PROFILES_LOCK.acquire()
     if not os.path.exists(PROFILES_DIR):
@@ -174,8 +186,13 @@ def init_online():
             return
         print('login ok')
 
+    def get_attacks(data):
+        print('listing attacks')
+        socket.emit('attacks', json.dumps({'userSid': data['userSid'], 'attacks': list_attacks(data['before'], 300)}))
+
     socket.on('connect', connect)
     socket.on('login', login)
+    socket.on('getAttacks', get_attacks)
     socket.connect()
 
 
