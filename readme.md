@@ -1,3 +1,3 @@
 # Simple guardian
 ## Easy alternative to fail2ban
-Last week I was too lazy to learn how to make working Fail2Ban filters, It appears too hard. So I decided to do something easier and more lightweight.
+Whole new version. Coming soon. I hope. Right now, you can check the legacy version [here](https://github.com/esoadamo/simple-guardian-legacy/) 
