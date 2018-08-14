@@ -143,13 +143,18 @@ def list_attacks(before=None, max_limit=None):
 
 
 def list_bans(before=None, max_limit=None):
-    sql = 'SELECT * FROM attacks'
+    sql = 'SELECT * FROM bans'
     if before is not None:
-        sql += ' WHERE id <= ?'
+        sql += ' WHERE id < ?'
+    sql += ' ORDER BY id DESC'
     if max_limit is not None:
         sql += ' LIMIT ' + str(max_limit)
-    sql += ' ORDER BY id DESC'
-    return Database.json(sql, 'attacks', (before,) if before is not None else ())
+    bans = Database.json(sql, 'bans', (before,) if before is not None else ())
+    for i, record in enumerate(bans):
+        ip_attacks_count = Database.execute('SELECT COUNT(*) FROM attacks WHERE ip = ?', (record['ip'],))[0][0]
+        bans[i]['attacksCount'] = ip_attacks_count
+    print(bans)
+    return bans
 
 
 def load_profiles():
@@ -201,9 +206,12 @@ def init_online():
         print('login ok')
 
     def get_attacks(data):
-        print('listing attacks')
         attacks = list_attacks(data['before'], 100)
         socket.emit('attacks', json.dumps({'userSid': data['userSid'], 'attacks': attacks}))
+
+    def get_bans(data):
+        bans = list_bans(data['before'], 100)
+        socket.emit('bans', json.dumps({'userSid': data['userSid'], 'bans': bans}))
 
     def config(data):
         PROFILES_LOCK.acquire()
@@ -215,6 +223,7 @@ def init_online():
     socket.on('connect', connect)
     socket.on('login', login)
     socket.on('getAttacks', get_attacks)
+    socket.on('getBans', get_bans)
     socket.on('config', config)
     socket.connect()
 
