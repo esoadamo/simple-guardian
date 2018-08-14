@@ -4,13 +4,40 @@ import os
 import sqlite3
 import sys
 from queue import Queue
+from subprocess import Popen
 from threading import Thread, Lock
 
 import requests
 import time
 
+import github_updater
 import log_manipulator
 from http_socket_client import HSocket
+
+# the Runner - this is what enables us to restart server during runtime
+if __name__ == '__main__':
+    """
+    If not slave, run this script again as a slave
+    When slave script ends, check if his return code is 42.
+    If so, restart the script again, otherwise exit program with given exitcode
+
+    Must be on start to keep memory usage as low as possible
+    """
+    if sys.argv[-1] != 'SLAVE':
+        try:
+            while True:
+                print('staring slave')
+                stderr = None
+                process = Popen([sys.executable] + sys.argv + ['SLAVE'])
+                process.communicate()
+                r = process.returncode
+                if r != 42:
+                    exit(r)
+        except KeyboardInterrupt:
+            print('^C received, shutting down master process')
+            exit(0)
+    del sys.argv[-1]
+# End of the Runner
 
 CONFIG_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir, 'data'))
 PROFILES_DIR = os.path.join(CONFIG_DIR, 'profiles')
@@ -18,7 +45,7 @@ CONFIG = {}
 ONLINE_DATA = {'loggedIn': False}
 PROFILES = {}
 PROFILES_LOCK = Lock()
-VERSION_TAG = "0.0"
+VERSION_TAG = "0.01"
 
 
 class Database:
@@ -84,6 +111,11 @@ class AppRunning:
             AppRunning.app_running.clear()
 
     @staticmethod
+    def exit(exit_code):
+        AppRunning.set_running(False)
+        exit(exit_code)
+
+    @staticmethod
     def sleep_while_running(seconds):
         while AppRunning.is_running() and seconds > 0:
             sleep = min(1, seconds)
@@ -92,9 +124,6 @@ class AppRunning:
 
 
 class ThreadScanner(Thread):
-    def __init__(self):
-        Thread.__init__(self)
-
     def run(self):
         while AppRunning.is_running():
             print('Scanning')
@@ -131,6 +160,31 @@ class ThreadScanner(Thread):
             if commit_db:
                 Database.commit()
             AppRunning.sleep_while_running(CONFIG['scanTime'])
+
+
+class Updater:
+    _updater = None
+
+    @staticmethod
+    def init():
+        Updater._updater = github_updater.GithubUpdater(CONFIG['updater']['githubOwner'],
+                                                        CONFIG['updater']['githubRepo'])
+
+    @staticmethod
+    def update_available():
+        return VERSION_TAG != Updater._updater.get_latest_release_tag()
+
+    @staticmethod
+    def get_latest_name() -> str:
+        return Updater._updater.get_latest_release_tag()
+
+    @staticmethod
+    def update():
+        print('starting update')
+        this_directory = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir))
+        Updater._updater.get_and_extract_newest_release_to_directory(this_directory)
+        print('update finished, restarting')
+        AppRunning.exit(42)
 
 
 def list_attacks(before=None, max_limit=None):
@@ -197,6 +251,15 @@ def login_with_server(url: str):
 def init_online():
     socket = HSocket(ONLINE_DATA['server_url'], auto_connect=False)
 
+    class ThreadDisconnectOnProgramEnd(Thread):
+        def run(self):
+            while AppRunning.is_running():
+                AppRunning.sleep_while_running(2)
+            print('disconnecting from server')
+            socket.disconnect()
+
+    ThreadDisconnectOnProgramEnd().start()
+
     def connect():
         socket.emit('login', json.dumps({'uid': ONLINE_DATA['device_id'], 'secret': ONLINE_DATA['device_secret']}))
 
@@ -204,7 +267,7 @@ def init_online():
         if not ok:
             print('login with server seems expired, please fix this')
             return
-        print('login ok')
+        print('login with server ok')
 
     def get_attacks(data):
         attacks = list_attacks(data['before'], 100)
@@ -251,6 +314,10 @@ def main():
     print('Profiles loaded')
 
     Database.init(os.path.join(CONFIG_DIR, 'db.db'))
+
+    Updater.init()
+    print('You are up to date' if not Updater.update_available()
+          else 'There is another version on the server: %s (you have %s)' % (VERSION_TAG, Updater.get_latest_name()))
 
     ThreadScanner().start()
     while True:

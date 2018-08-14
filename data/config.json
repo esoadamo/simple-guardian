@@ -1,5 +1,10 @@
 {
  "scanTime": 30,
+  "updater": {
+    "githubOwner": "esoadamo",
+    "githubRepo": "simple-guardian",
+    "autoupdate": false
+  },
  "defaults": {
   "scanRange": 600,
   "maxAttempts": 5,
