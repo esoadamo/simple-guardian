@@ -1,8 +1,8 @@
 import json
-import time
 from threading import Thread
 
 import requests
+import time
 
 
 class HSocket:
@@ -91,7 +91,7 @@ class HSocket:
                                     timeout=10).json()
                 if data['action'] != 'retry':
                     break
-                time.sleep(10)
+                time.sleep(1)  # TODO increase this in prod
             return data
         except requests.exceptions.ConnectionError:
             self.disconnect(reconnect=True)

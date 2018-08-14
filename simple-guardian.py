@@ -3,11 +3,11 @@ import json
 import os
 import sqlite3
 import sys
-import time
 from queue import Queue
 from threading import Thread, Lock
 
 import requests
+import time
 
 import log_manipulator
 from http_socket_client import HSocket
@@ -52,6 +52,12 @@ class Database:
         respond = Database.queue_out.get()
         Database.db_lock.release()
         return respond
+
+    @staticmethod
+    def json(command, table, data=()):
+        columns = [column_data[1] for column_data in Database.execute("PRAGMA table_info(%s)" % table)]
+        records = Database.execute(command, data)
+        return [{columns[i]: value for i, value in enumerate(record)} for record in records]
 
     @staticmethod
     def commit():
@@ -129,13 +135,21 @@ class ThreadScanner(Thread):
 def list_attacks(before=None, max_limit=None):
     sql = 'SELECT * FROM attacks'
     if before is not None:
-        sql += ' WHERE time <= ?'
+        sql += ' WHERE id < ?'
+    sql += ' ORDER BY id DESC'
     if max_limit is not None:
         sql += ' LIMIT ' + str(max_limit)
-    columns = [column_data[1] for column_data in Database.execute("PRAGMA table_info(attacks)")]
-    records = Database.execute(sql, (before,) if before is not None else ())
+    return Database.json(sql, 'attacks', (before,) if before is not None else ())
 
-    return [{columns[i]: value for i, value in enumerate(record)} for record in records]
+
+def list_bans(before=None, max_limit=None):
+    sql = 'SELECT * FROM attacks'
+    if before is not None:
+        sql += ' WHERE id <= ?'
+    if max_limit is not None:
+        sql += ' LIMIT ' + str(max_limit)
+    sql += ' ORDER BY id DESC'
+    return Database.json(sql, 'attacks', (before,) if before is not None else ())
 
 
 def load_profiles():
@@ -188,7 +202,8 @@ def init_online():
 
     def get_attacks(data):
         print('listing attacks')
-        socket.emit('attacks', json.dumps({'userSid': data['userSid'], 'attacks': list_attacks(data['before'], 300)}))
+        attacks = list_attacks(data['before'], 100)
+        socket.emit('attacks', json.dumps({'userSid': data['userSid'], 'attacks': attacks}))
 
     socket.on('connect', connect)
     socket.on('login', login)
