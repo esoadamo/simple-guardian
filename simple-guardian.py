@@ -205,9 +205,17 @@ def init_online():
         attacks = list_attacks(data['before'], 100)
         socket.emit('attacks', json.dumps({'userSid': data['userSid'], 'attacks': attacks}))
 
+    def config(data):
+        PROFILES_LOCK.acquire()
+        with open(os.path.join(PROFILES_DIR, 'online.json'), 'w') as f:
+            json.dump(json.loads(data), f, indent=2)
+        PROFILES_LOCK.release()
+        load_profiles()
+
     socket.on('connect', connect)
     socket.on('login', login)
     socket.on('getAttacks', get_attacks)
+    socket.on('config', config)
     socket.connect()
 
 
