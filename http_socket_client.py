@@ -17,6 +17,8 @@ class HSocket:
         self._connecting = False
         self.sid = None
 
+        self._last_message_time = time.time()
+
         if auto_connect:
             self.connect()
 
@@ -90,8 +92,9 @@ class HSocket:
                 data = requests.get(self.host + '/hsocket/', params=None if self.sid is None else {'sid': self.sid},
                                     timeout=10).json()
                 if data['action'] != 'retry':
+                    self._last_message_time = time.time()
                     break
-                time.sleep(1)  # TODO increase this in prod
+                time.sleep(max(10.0, max(1.0, time.time() - self._last_message_time)))
             return data
         except requests.exceptions.ConnectionError:
             self.disconnect(reconnect=True)
