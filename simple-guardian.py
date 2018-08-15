@@ -24,6 +24,7 @@ if __name__ == '__main__':
     Must be on start to keep memory usage as low as possible
     """
     if sys.argv[-1] != 'SLAVE':
+        process = None
         try:
             while True:
                 print('staring slave')
@@ -34,6 +35,8 @@ if __name__ == '__main__':
                 if r != 42:
                     exit(r)
         except KeyboardInterrupt:
+            if process is not None:
+                process.kill()
             print('^C received, shutting down master process')
             exit(0)
     del sys.argv[-1]
@@ -186,6 +189,14 @@ class Updater:
         print('update finished, restarting')
         AppRunning.exit(42)
 
+    @staticmethod
+    def update_master():
+        print('starting update to the master branch')
+        this_directory = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir))
+        Updater._updater.extract_master(this_directory)
+        print('update finished, restarting')
+        AppRunning.exit(42)
+
 
 def list_attacks(before=None, max_limit=None):
     sql = 'SELECT * FROM attacks'
@@ -208,7 +219,6 @@ def list_bans(before=None, max_limit=None):
     for i, record in enumerate(bans):
         ip_attacks_count = Database.execute('SELECT COUNT(*) FROM attacks WHERE ip = ?', (record['ip'],))[0][0]
         bans[i]['attacksCount'] = ip_attacks_count
-    print(bans)
     return bans
 
 
@@ -284,11 +294,24 @@ def init_online():
         PROFILES_LOCK.release()
         load_profiles()
 
+    def update():
+        Updater.update()
+
+    def update_master():
+        Updater.update_master()
+
+    def get_update_information(user_sid):
+        socket.emit('update_info', json.dumps({'userSid': user_sid, 'versionCurrent': VERSION_TAG,
+                                               'versionLatest': Updater.get_latest_name()}))
+
     socket.on('connect', connect)
     socket.on('login', login)
     socket.on('getAttacks', get_attacks)
     socket.on('getBans', get_bans)
     socket.on('config', config)
+    socket.on('update', update)
+    socket.on('update_master', update_master)
+    socket.on('get_update_information', get_update_information)
     socket.connect()
 
 
