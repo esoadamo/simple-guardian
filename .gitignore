@@ -1,6 +1,7 @@
 .idea/
 venv*
-data/profiles/
+data/profiles/*
+!data/profiles/default.json
 data/db.db
 *.log
 __pycache__/
