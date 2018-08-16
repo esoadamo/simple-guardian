@@ -326,14 +326,25 @@ def init_online():
     socket.connect()
 
 
+def cli():
+    del sys.argv[1]
+    if 'login' in sys.argv:
+        print(login_with_server(sys.argv[sys.argv.index('login') + 1])[1])
+        exit()
+    print('for help enter simple-guardian-client help')
+
+
 def main():
     # Load global configs
     with open(os.path.join(CONFIG_DIR, 'config.json'), 'r') as f:
         CONFIG.update(json.load(f))
 
-    if 'login' in sys.argv:
-        print(login_with_server(sys.argv[sys.argv.index('login') + 1])[1])
-        exit()
+    try:
+        if sys.argv[1] == 'client':
+            cli()
+            exit()
+    except IndexError:
+        pass
 
     # Load online config
     if os.path.isfile(os.path.join(CONFIG_DIR, 'server.json')):
