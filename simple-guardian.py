@@ -343,9 +343,9 @@ def main():
           else 'There is another version on the server: %s (you have %s)' % (VERSION_TAG, Updater.get_latest_name()))
 
     ThreadScanner().start()
-    while True:
+    while AppRunning.is_running():
         try:
-            input()
+            AppRunning.sleep_while_running(10)
         except KeyboardInterrupt:
             AppRunning.set_running(False)
 
