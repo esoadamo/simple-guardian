@@ -61,6 +61,17 @@ class Database:
         class ThreadDatabase(Thread):
             def run(self):
                 connection = sqlite3.connect(file_path)
+                connection.execute('CREATE TABLE IF NOT EXISTS "bans" ('
+                                   '`id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,'
+                                   '`time` INTEGER NOT NULL,'
+                                   '`ip` TEXT NOT NULL);')
+                connection.execute('CREATE TABLE IF NOT EXISTS "attacks" ('
+                                   '`id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,'
+                                   '`time` INTEGER NOT NULL,'
+                                   '`ip` TEXT NOT NULL,'
+                                   '`profile` TEXT NOT NULL,'
+                                   '`user` TEXT,'
+                                   '`data` INTEGER NOT NULL);')
                 while AppRunning.is_running():
                     if not Database.queue_in.empty():
                         data = Database.queue_in.get()
