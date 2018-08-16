@@ -331,6 +331,21 @@ def cli():
     if 'login' in sys.argv:
         print(login_with_server(sys.argv[sys.argv.index('login') + 1])[1])
         exit()
+    if 'uninstall' in sys.argv:
+        os.system("sudo service simple-guardian stop; sudo userdel simple-guardian; sudo rm -r "
+                  "/usr/share/simple-guardian/;  sudo rm -r /usr/bin/simple-guardian-client; sudo rm "
+                  "/etc/systemd/system/simple-guardian.service")
+        print('uninstalled')
+        exit()
+    if '-V' in sys.argv or 'version' in sys.argv:
+        print(VERSION_TAG)
+        exit()
+    if 'help' in sys.argv:
+        print('recognized commands:')
+        print('login loginKey     ...........   logins with online server for remote control')
+        print('uninstall          ...........   wipes simple guardian from disc')
+        print('-V/version         ...........   prints version and exits')
+        exit()
     print('for help enter simple-guardian-client help')
 
 
