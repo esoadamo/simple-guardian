@@ -3,12 +3,12 @@ import json
 import os
 import sqlite3
 import sys
+import time
 from queue import Queue
 from subprocess import Popen
 from threading import Thread, Lock
 
 import requests
-import time
 
 import github_updater
 import log_manipulator
@@ -31,9 +31,12 @@ if __name__ == '__main__':
                 stderr = None
                 process = Popen([sys.executable] + sys.argv + ['SLAVE'])
                 process.communicate()
+                process.wait()
                 r = process.returncode
-                if r != 42:
-                    exit(r)
+                if r == 42:
+                    continue
+                break
+            exit(r)
         except KeyboardInterrupt:
             if process is not None:
                 process.kill()
@@ -336,6 +339,14 @@ def cli():
                   "/usr/share/simple-guardian/;  sudo rm -r /usr/bin/simple-guardian-client; sudo rm "
                   "/etc/systemd/system/simple-guardian.service")
         print('uninstalled')
+        exit()
+    if 'update' in sys.argv:
+        if Updater.update_available() or '-f' in sys.argv:
+            Updater.update()
+        'no update needed'
+        exit()
+    if 'update-master':
+        Updater.update_master()
         exit()
     if '-V' in sys.argv or 'version' in sys.argv:
         print(VERSION_TAG)
