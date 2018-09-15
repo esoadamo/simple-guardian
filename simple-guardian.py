@@ -27,7 +27,6 @@ if __name__ == '__main__':
         process = None
         try:
             while True:
-                print('staring slave')
                 stderr = None
                 process = Popen([sys.executable] + sys.argv + ['SLAVE'])
                 process.communicate()
@@ -143,7 +142,7 @@ class AppRunning:
 class ThreadScanner(Thread):
     def run(self):
         while AppRunning.is_running():
-            print('Scanning')
+            print('scanning for attacks')
             commit_db = False
             PROFILES_LOCK.acquire()
             profiles_copy = dict(PROFILES)
@@ -176,6 +175,7 @@ class ThreadScanner(Thread):
                         commit_db = True
             if commit_db:
                 Database.commit()
+            print('scanning for attacks completed')
             AppRunning.sleep_while_running(CONFIG['scanTime'])
 
 
