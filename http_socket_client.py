@@ -1,8 +1,8 @@
 import json
+import time
 from threading import Thread
 
 import requests
-import time
 
 
 class HSocket:
@@ -67,7 +67,7 @@ class HSocket:
 
         if reconnect:
             def f_reconnect():
-                time.sleep(2)
+                time.sleep(30)
                 self.connect()
 
             AsyncExecuter(f_reconnect).start()
@@ -86,11 +86,15 @@ class HSocket:
         requests.post(self.host + '/hsocket/', params={'sid': self.sid}, data={'action': 'event', 'name': event_name,
                                                                                'data': data})
 
-    def _get_message(self) -> dict:
+    def _get_message(self) -> dict or None:
         try:
             while True:
-                data = requests.get(self.host + '/hsocket/', params=None if self.sid is None else {'sid': self.sid},
-                                    timeout=10).json()
+                request = requests.get(self.host + '/hsocket/', params=None if self.sid is None else {'sid': self.sid},
+                                       timeout=10)
+                if request.status_code not in [200, 404]:
+                    self.disconnect(reconnect=True)
+                    return
+                data = request.json()
                 if data['action'] != 'retry':
                     self._last_message_time = time.time()
                     break

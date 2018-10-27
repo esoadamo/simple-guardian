@@ -2,6 +2,7 @@
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 import time
 from queue import Queue
@@ -137,6 +138,26 @@ class AppRunning:
             sleep = min(1, seconds)
             time.sleep(sleep)
             seconds -= sleep
+
+
+class IPBLocker:
+    block_command_path = './blocker'
+
+    @staticmethod
+    def list_blocked_ips() -> set:
+        return {record[0] for record in Database.execute('SELECT ip FROM bans')}
+
+    @classmethod
+    def block_all_banned(cls):
+        [cls.block(ip) for ip in cls.list_blocked_ips()]
+
+    @classmethod
+    def block(cls, ip):
+        subprocess.run([cls.block_command_path, 'block', ip])
+
+    @classmethod
+    def unblock(cls, ip):
+        subprocess.run([cls.block_command_path, 'unblock', ip])
 
 
 class ThreadScanner(Thread):
@@ -385,6 +406,9 @@ def main():
     print('Profiles loaded')
 
     Database.init(os.path.join(CONFIG_DIR, 'db.db'))
+
+    print('Blocking all previously blocked IPs')
+    IPBLocker.block_all_banned()
 
     Updater.init()
     print('You are up to date' if not Updater.update_available()
