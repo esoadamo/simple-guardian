@@ -260,7 +260,7 @@ def load_profiles():
 
 def login_with_server(url: str):
     try:
-        server_data = requests.get(url).json()
+        server_data = requests.post(url).json()
     except requests.exceptions.ConnectionError:
         return False, 'cannot login, server is unreachable'
     except json.JSONDecodeError:
