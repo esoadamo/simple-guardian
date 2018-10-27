@@ -382,7 +382,7 @@ def cli():
             Updater.update()
         'no update needed'
         exit()
-    if 'update-master':
+    if 'update-master' in sys.argv:
         Updater.update_master()
         exit()
     if '-V' in sys.argv or 'version' in sys.argv:
