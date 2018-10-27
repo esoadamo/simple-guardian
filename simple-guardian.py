@@ -5,6 +5,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from datetime import date
 from queue import Queue
 from subprocess import Popen
 from threading import Thread, Lock
@@ -322,6 +323,20 @@ def init_online():
         bans = list_bans(data['before'], 100)
         socket.emit('bans', json.dumps({'userSid': data['userSid'], 'bans': bans}))
 
+    def get_statistic_info(data):
+        attacks_total = Database.execute('SELECT COUNT(*) FROM attacks')[0]
+        bans_total = Database.execute('SELECT COUNT(*) FROM bans')[0]
+
+        last_midnight_time = time.mktime(date.today().timetuple())
+        attacks_today = Database.execute('SELECT COUNT(*) FROM attacks WHERE time > ?', last_midnight_time)[0]
+        bans_today = Database.execute('SELECT COUNT(*) FROM bans WHERE time > ?', last_midnight_time)[0]
+
+        socket.emit('statistic_data', json.dumps(
+            {'userSid': data['userSid'],
+             'bans': {'total': bans_total, 'today': bans_today},
+             'attacks': {'total': attacks_total, 'today': attacks_today}}
+        ))
+
     def config(data):
         PROFILES_LOCK.acquire()
         with open(os.path.join(PROFILES_DIR, 'online.json'), 'w') as f:
@@ -343,6 +358,7 @@ def init_online():
     socket.on('login', login)
     socket.on('getAttacks', get_attacks)
     socket.on('getBans', get_bans)
+    socket.on('getStatisticInfo', get_statistic_info)
     socket.on('config', config)
     socket.on('update', update)
     socket.on('update_master', update_master)
