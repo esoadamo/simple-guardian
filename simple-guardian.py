@@ -381,11 +381,13 @@ def cli():
         print('uninstalled')
         exit()
     if 'update' in sys.argv:
+        Updater.init()
         if Updater.update_available() or '-f' in sys.argv:
             Updater.update()
         'no update needed'
         exit()
     if 'update-master' in sys.argv:
+        Updater.init()
         Updater.update_master()
         exit()
     if '-V' in sys.argv or 'version' in sys.argv:
