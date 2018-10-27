@@ -171,7 +171,10 @@ class ThreadScanner(Thread):
             PROFILES_LOCK.release()
             for profile, profile_data in profiles_copy.items():
                 parser = log_manipulator.LogParser(profile_data['logFile'], profile_data['filters'])
-                attacks = parser.parse_attacks(max_age=profile_data['scanRange'] * 2)
+                try:
+                    attacks = parser.parse_attacks(max_age=profile_data['scanRange'] * 2)
+                except FileNotFoundError:
+                    continue
                 known_attack_timestamps = []
                 for ip, ip_attacks in attacks.items():
                     for i, attack_data in enumerate(ip_attacks):
