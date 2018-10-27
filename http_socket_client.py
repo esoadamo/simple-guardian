@@ -43,6 +43,7 @@ class HSocket:
                         self.connected = True
                         self._run_listener('connect')
                     elif msg.get('action', '') == 'event':
+                        print(msg['name'], msg['data'])
                         self._run_listener(msg['name'], msg['data'])
                     elif msg.get('action', '') == 'set_max_msg_interval':
                         self.__fetch_msg_max_time = msg['data']
@@ -62,8 +63,9 @@ class HSocket:
             try:
                 requests.post(self.host + '/hsocket/', params={'sid': self.sid}, data={'action': 'disconnect'},
                               timeout=5)
-            except requests.exceptions.ConnectionError or requests.exceptions.ConnectTimeout \
-                   or requests.exceptions.ReadTimeout:
+            except requests.exceptions.ConnectionError or requests.exceptions.ConnectTimeout:
+                pass
+            except requests.exceptions.ReadTimeout:
                 pass
             self.connected = False
             self._run_listener('disconnect')
@@ -86,8 +88,12 @@ class HSocket:
     def emit(self, event_name: str, data=None):
         if not self.connected:
             return
-        requests.post(self.host + '/hsocket/', params={'sid': self.sid}, data={'action': 'event', 'name': event_name,
-                                                                               'data': data})
+        try:
+            requests.post(self.host + '/hsocket/', params={'sid': self.sid}, data={'action': 'event',
+                                                                                   'name': event_name,
+                                                                                   'data': data})
+        except requests.exceptions.ConnectionError:
+            self.disconnect(reconnect=True)
 
     def _get_message(self) -> dict or None:
         try:
