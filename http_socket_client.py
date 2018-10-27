@@ -18,6 +18,7 @@ class HSocket:
         self.sid = None
 
         self._last_message_time = time.time()
+        self._fetch_msg_max_time = 10.0
 
         if auto_connect:
             self.connect()
@@ -43,6 +44,8 @@ class HSocket:
                         self._run_listener('connect')
                     elif msg.get('action', '') == 'event':
                         self._run_listener(msg['name'], msg['data'])
+                    elif msg.get('action', '') == 'set_max_msg_interval':
+                        self.__fetch_msg_max_time = msg['data']
 
         self.__thread = HSocketRecevierThread()
         self.__thread.start()
@@ -95,10 +98,10 @@ class HSocket:
                     self.disconnect(reconnect=True)
                     return
                 data = request.json()
-                if data['action'] != 'retry':
+                if data.get('action', '') != 'retry':
                     self._last_message_time = time.time()
                     break
-                time.sleep(max(10.0, max(1.0, time.time() - self._last_message_time)))
+                time.sleep(min(self._fetch_msg_max_time, max(1.0, time.time() - self._last_message_time)))
             return data
         except requests.exceptions.ConnectionError:
             self.disconnect(reconnect=True)
