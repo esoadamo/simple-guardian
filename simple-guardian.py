@@ -52,7 +52,7 @@ CONFIG = {}
 ONLINE_DATA = {'loggedIn': False}
 PROFILES = {}
 PROFILES_LOCK = Lock()
-VERSION_TAG = "0.98"
+VERSION_TAG = "1.0"
 
 
 class Database:
