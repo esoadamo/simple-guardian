@@ -437,7 +437,7 @@ def main():
 
     Updater.init()
     print('You are up to date' if not Updater.update_available()
-          else 'There is another version on the server: %s (you have %s)' % (VERSION_TAG, Updater.get_latest_name()))
+          else 'There is another version on the server: %s (you have %s)' % (Updater.get_latest_name(), VERSION_TAG))
 
     ThreadScanner().start()
     while AppRunning.is_running():
