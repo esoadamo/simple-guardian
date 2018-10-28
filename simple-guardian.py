@@ -399,7 +399,7 @@ def cli():
         print(login_with_server(sys.argv[sys.argv.index('login') + 1])[1])
         exit()
     if 'uninstall' in sys.argv:
-        os.system("sudo service simple-guardian stop; sudo userdel simple-guardian; sudo rm -r "
+        os.system("sudo service simple-guardian stop; sudo userdel simpleguardian; sudo rm -r "
                   "/usr/share/simple-guardian/;  sudo rm -r /usr/bin/simple-guardian-client; sudo rm "
                   "/etc/systemd/system/simple-guardian.service")
         print('uninstalled')
