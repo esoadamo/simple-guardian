@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <pwd.h>
 
 #define iptables /sbin/iptables
 #define username "simpleguardian"
@@ -15,10 +16,13 @@ void help(int exitStatus){
 }
 
 int check_user_valid(){
-    char curr_user[256];
-    getlogin_r(curr_user, 256);
+    uid_t uid;
+    struct passwd *udetails;
 
-    return !strcmp(username, curr_user);
+    uid = getuid();
+    udetails = getpwuid(uid);
+
+    return !strcmp(username, udetails->pw_name);
 }
 
 
