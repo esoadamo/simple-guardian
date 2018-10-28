@@ -395,14 +395,32 @@ def init_online():
 
 def cli():
     del sys.argv[1]
-    if 'login' in sys.argv:
-        print(login_with_server(sys.argv[sys.argv.index('login') + 1])[1])
-        exit()
+
     if 'uninstall' in sys.argv:
         os.system("sudo service simple-guardian stop; sudo userdel simpleguardian; sudo rm -r "
                   "/usr/share/simple-guardian/;  sudo rm -r /usr/bin/simple-guardian-client; sudo rm "
                   "/etc/systemd/system/simple-guardian.service")
         print('uninstalled')
+        exit()
+    if '-V' in sys.argv or 'version' in sys.argv:
+        print(VERSION_TAG)
+        exit()
+    if 'help' in sys.argv:
+        print('recognized commands:')
+        print('login loginKey     ...........   logins with online server for remote control')
+        print('uninstall          ...........   wipes simple guardian from disc')
+        print('update             ...........   updates s-g to the latest version from GitHub releases')
+        print('update-master      ...........   updates s-g to the latest version from GitHub master branch')
+        print('unblock            ...........   unblocks IP blocked by s-g')
+        print('-V/version         ...........   prints version and exits')
+        exit()
+
+    if os.geteuid() != 0:
+        print('this option must be executed as root')
+        exit(1)
+
+    if 'login' in sys.argv:
+        print(login_with_server(sys.argv[sys.argv.index('login') + 1])[1])
         exit()
     if 'update' in sys.argv:
         Updater.init()
@@ -416,9 +434,6 @@ def cli():
         exit()
     if 'unblock' in sys.argv:
         blocked_ip = None
-        if os.geteuid() != 0:
-            print('this option must be executed as root')
-            exit(1)
         try:
             blocked_ip = sys.argv[sys.argv.index('unblock') + 1]
         except IndexError:
@@ -430,19 +445,6 @@ def cli():
             AppRunning.exit(0)
         print('%s was unblocked' % blocked_ip)
         AppRunning.exit(0)
-
-    if '-V' in sys.argv or 'version' in sys.argv:
-        print(VERSION_TAG)
-        exit()
-    if 'help' in sys.argv:
-        print('recognized commands:')
-        print('login loginKey     ...........   logins with online server for remote control')
-        print('uninstall          ...........   wipes simple guardian from disc')
-        print('update             ...........   updates s-g to the latest version from GitHub releases')
-        print('update-master      ...........   updates s-g to the latest version from GitHub master branch')
-        print('unblock            ...........   must be executed as root, unblocks IP blocked by s-g')
-        print('-V/version         ...........   prints version and exits')
-        exit()
     print('for help enter simple-guardian-client help')
 
 
