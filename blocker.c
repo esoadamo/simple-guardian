@@ -36,9 +36,18 @@ int main(int argc, char **argv){
         help(0);
     }
     if (!strcmp("block",argv[indexCommand])){
-        printf("blocking %s\n", argv[indexIp]);
+        // Check if the IP is not blocked yet
+        char command_check_if_blocked[] = "iptables -C INPUT -s %s -j DROP > /dev/null 2>&1";
+        char *command_check_if_blocked_formatted = (char*)malloc(sizeof(command_check_if_blocked) + sizeof(argv[indexIp]));
+        sprintf(command_check_if_blocked_formatted, command_check_if_blocked, argv[indexIp]);
+        if (system(command_check_if_blocked_formatted) == 0){
+            printf("%s is already blocked\n", argv[indexIp]);
+            exit(0);
+        }
 
-        char command[] = "iptables -A INPUT -s %s -j DROP";
+        // And now block it
+        printf("blocking %s\n", argv[indexIp]);
+        char command[] = "iptables -A INPUT -s %s -j DROP > /dev/null 2>&1";
         char *command_formatted = (char*)malloc(sizeof(command) + sizeof(argv[indexIp]));
         sprintf(command_formatted, command, argv[indexIp]);
 
@@ -48,7 +57,7 @@ int main(int argc, char **argv){
     } else if (!strcmp("unblock",argv[indexCommand])){
         printf("unblocking %s\n", argv[indexIp]);
 
-        char command[] = "iptables -D INPUT -s %s -j DROP";
+        char command[] = "iptables -D INPUT -s %s -j DROP > /dev/null 2>&1";
         char *command_formatted = (char*)malloc(sizeof(command) + sizeof(argv[indexIp]));
         sprintf(command_formatted, command, argv[indexIp]);
 
