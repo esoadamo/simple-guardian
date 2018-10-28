@@ -326,18 +326,18 @@ def init_online():
         bans = list_bans(data['before'], 100)
         socket.emit('bans', json.dumps({'userSid': data['userSid'], 'bans': bans}))
 
-    def get_statistic_info(data):
+    def get_statistic_info(sid):
         attacks_total = Database.execute('SELECT COUNT(*) FROM attacks')[0]
         bans_total = Database.execute('SELECT COUNT(*) FROM bans')[0]
 
-        last_midnight_time = time.mktime(date.today().timetuple())
-        attacks_today = Database.execute('SELECT COUNT(*) FROM attacks WHERE time > ?', last_midnight_time)[0]
-        bans_today = Database.execute('SELECT COUNT(*) FROM bans WHERE time > ?', last_midnight_time)[0]
+        last_midnight_time = int(time.mktime(date.today().timetuple()))
+        attacks_today = Database.execute('SELECT COUNT(*) FROM attacks WHERE time > ?', (last_midnight_time,))[0]
+        bans_today = Database.execute('SELECT COUNT(*) FROM bans WHERE time > ?', (last_midnight_time,))[0]
 
         socket.emit('statistic_data', json.dumps(
-            {'userSid': data['userSid'],
+            {'userSid': sid, 'data': {
              'bans': {'total': bans_total, 'today': bans_today},
-             'attacks': {'total': attacks_total, 'today': attacks_today}}
+                'attacks': {'total': attacks_total, 'today': attacks_today}}}
         ))
 
     def config(data):
