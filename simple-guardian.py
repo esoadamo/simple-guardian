@@ -436,8 +436,11 @@ def main():
     IPBLocker.block_all_banned()
 
     Updater.init()
-    print('You are up to date' if not Updater.update_available()
+    update_available = Updater.update_available()
+    print('You are up to date' if not update_available
           else 'There is another version on the server: %s (you have %s)' % (Updater.get_latest_name(), VERSION_TAG))
+    if update_available and CONFIG.get('updater', {}).get('autoupdate', False):
+        Updater.update()
 
     ThreadScanner().start()
     while AppRunning.is_running():
