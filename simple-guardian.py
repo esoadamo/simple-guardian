@@ -394,6 +394,26 @@ def cli():
         Updater.init()
         Updater.update_master(restart=False)
         exit()
+    if 'unblock' in sys.argv:
+        blocked_ip = None
+        if os.geteuid() != 0:
+            print('this option must be executed as root')
+            exit(1)
+        try:
+            blocked_ip = sys.argv[sys.argv.index('unblock') + 1]
+        except IndexError:
+            print('ypu have to specify the IP to unblock')
+            exit(1)
+        Database.init(os.path.join(CONFIG_DIR, 'db.db'))
+        if Database.execute('SELECT COUNT(*) FROM bans WHERE ip = ?', (blocked_ip,))[0][0] == 0:
+            print('"%s" is not blocked' % blocked_ip)
+            AppRunning.exit(0)
+        IPBLocker.unblock(blocked_ip)
+        Database.execute('DELETE FROM bans WHERE ip = ?', (blocked_ip,))
+        Database.commit()
+        print('%s was unblocked' % blocked_ip)
+        AppRunning.exit(0)
+
     if '-V' in sys.argv or 'version' in sys.argv:
         print(VERSION_TAG)
         exit()
@@ -401,6 +421,9 @@ def cli():
         print('recognized commands:')
         print('login loginKey     ...........   logins with online server for remote control')
         print('uninstall          ...........   wipes simple guardian from disc')
+        print('update             ...........   updates s-g to the latest version from GitHub releases')
+        print('update-master      ...........   updates s-g to the latest version from GitHub master branch')
+        print('unblock            ...........   must be executed as root, unblocks IP blocked by s-g')
         print('-V/version         ...........   prints version and exits')
         exit()
     print('for help enter simple-guardian-client help')
