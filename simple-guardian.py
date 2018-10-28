@@ -141,24 +141,40 @@ class AppRunning:
             seconds -= sleep
 
 
-class IPBLocker:
+class IPBlocker:
     block_command_path = './blocker'
 
     @staticmethod
     def list_blocked_ips() -> set:
         return {record[0] for record in Database.execute('SELECT ip FROM bans')}
 
+    @staticmethod
+    def ip_is_blocked(ip):
+        return Database.execute('SELECT COUNT(*) FROM bans WHERE ip = ?', (ip,))[0][0] != 0
+
     @classmethod
     def block_all_banned(cls):
         [cls.block(ip) for ip in cls.list_blocked_ips()]
 
     @classmethod
-    def block(cls, ip):
+    def block(cls, ip, commit_db=True):
+        if cls.ip_is_blocked(ip):
+            return False
         subprocess.run([cls.block_command_path, 'block', ip])
+        Database.execute('INSERT INTO `bans`(`time`,`ip`) VALUES (?,?);', (time.time(), ip))
+        if commit_db:
+            Database.commit()
+        return True
 
     @classmethod
-    def unblock(cls, ip):
+    def unblock(cls, ip, commit_db=True):
+        if not cls.ip_is_blocked(ip):
+            return False
         subprocess.run([cls.block_command_path, 'unblock', ip])
+        Database.execute('DELETE FROM bans WHERE ip = ?', (ip,))
+        if commit_db:
+            Database.commit()
+        return True
 
 
 class ThreadScanner(Thread):
@@ -193,10 +209,7 @@ class ThreadScanner(Thread):
                 offenders = parser.get_habitual_offenders(profile_data['maxAttempts'], profile_data['scanRange'],
                                                           attacks=attacks)
                 for offender_ip in offenders.keys():
-                    if Database.execute('SELECT COUNT(*) FROM bans WHERE ip = ?',
-                                        (offender_ip,))[0][0] == 0:
-                        Database.execute('INSERT INTO `bans`(`time`,`ip`) VALUES (?,?);',
-                                         (time.time(), offender_ip))
+                    if IPBlocker.block(offender_ip, commit_db=False):
                         commit_db = True
             if commit_db:
                 Database.commit()
@@ -405,12 +418,9 @@ def cli():
             print('ypu have to specify the IP to unblock')
             exit(1)
         Database.init(os.path.join(CONFIG_DIR, 'db.db'))
-        if Database.execute('SELECT COUNT(*) FROM bans WHERE ip = ?', (blocked_ip,))[0][0] == 0:
+        if not IPBlocker.unblock(blocked_ip):
             print('"%s" is not blocked' % blocked_ip)
             AppRunning.exit(0)
-        IPBLocker.unblock(blocked_ip)
-        Database.execute('DELETE FROM bans WHERE ip = ?', (blocked_ip,))
-        Database.commit()
         print('%s was unblocked' % blocked_ip)
         AppRunning.exit(0)
 
@@ -456,7 +466,7 @@ def main():
     Database.init(os.path.join(CONFIG_DIR, 'db.db'))
 
     print('Blocking all previously blocked IPs')
-    IPBLocker.block_all_banned()
+    IPBlocker.block_all_banned()
 
     Updater.init()
     update_available = Updater.update_available()
