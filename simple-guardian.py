@@ -370,6 +370,9 @@ def init_online():
     def update_master():
         Updater.update_master()
 
+    def unblock_ip(ip):
+        IPBlocker.unblock(ip)
+
     def get_update_information(user_sid):
         socket.emit('update_info', json.dumps({'userSid': user_sid, 'versionCurrent': VERSION_TAG,
                                                'versionLatest': Updater.get_latest_name()}))
@@ -383,6 +386,7 @@ def init_online():
     socket.on('update', update)
     socket.on('update_master', update_master)
     socket.on('get_update_information', get_update_information)
+    socket.on('unblock_ip', unblock_ip)
     socket.connect()
 
 
