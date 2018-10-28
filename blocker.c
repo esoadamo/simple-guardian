@@ -5,7 +5,7 @@
 #include <unistd.h>
 
 #define iptables /sbin/iptables
-#define username "simple-guardian"
+#define username "simpleguardian"
 #define indexCommand 1  
 #define indexIp 2
 
