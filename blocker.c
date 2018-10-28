@@ -22,13 +22,13 @@ int check_user_valid(){
     uid = getuid();
     udetails = getpwuid(uid);
 
-    return !strcmp(username, udetails->pw_name);
+    return !strcmp(username, udetails->pw_name) || !strcmp("root", udetails->pw_name);
 }
 
 
 int main(int argc, char **argv){
     if (!check_user_valid()){
-        printf("this program is exclusive for user %s\n", username);
+        printf("this program is exclusive for user %s or root\n", username);
         exit(1);
     }
     setuid(0);
