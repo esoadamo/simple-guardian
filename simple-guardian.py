@@ -154,16 +154,17 @@ class IPBlocker:
 
     @classmethod
     def block_all_banned(cls):
-        [cls.block(ip) for ip in cls.list_blocked_ips()]
+        [cls.block(ip, commit_db=False, use_db=False) for ip in cls.list_blocked_ips()]
 
     @classmethod
-    def block(cls, ip, commit_db=True):
-        if cls.ip_is_blocked(ip):
+    def block(cls, ip, commit_db=True, use_db=True):
+        if use_db and cls.ip_is_blocked(ip):
             return False
         subprocess.run([cls.block_command_path, 'block', ip])
-        Database.execute('INSERT INTO `bans`(`time`,`ip`) VALUES (?,?);', (time.time(), ip))
-        if commit_db:
-            Database.commit()
+        if use_db:
+            Database.execute('INSERT INTO `bans`(`time`,`ip`) VALUES (?,?);', (time.time(), ip))
+            if commit_db:
+                Database.commit()
         return True
 
     @classmethod
