@@ -52,7 +52,7 @@ CONFIG = {}
 ONLINE_DATA = {'loggedIn': False}
 PROFILES = {}
 PROFILES_LOCK = Lock()
-VERSION_TAG = "0.01"
+VERSION_TAG = "0.98"
 
 
 class Database:
@@ -221,20 +221,24 @@ class Updater:
         return Updater._updater.get_latest_release_tag()
 
     @staticmethod
-    def update():
+    def update(restart=True):
         print('starting update')
         this_directory = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir))
         Updater._updater.get_and_extract_newest_release_to_directory(this_directory)
-        print('update finished, restarting')
-        AppRunning.exit(42)
+        if restart:
+            print('update finished, restarting')
+            AppRunning.exit(42)
+        print('update finished')
 
     @staticmethod
-    def update_master():
+    def update_master(restart=True):
         print('starting update to the master branch')
         this_directory = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir))
         Updater._updater.extract_master(this_directory)
-        print('update finished, restarting')
-        AppRunning.exit(42)
+        if restart:
+            print('update finished, restarting')
+            AppRunning.exit(42)
+        print('update finished')
 
 
 def list_attacks(before=None, max_limit=None):
@@ -383,12 +387,12 @@ def cli():
     if 'update' in sys.argv:
         Updater.init()
         if Updater.update_available() or '-f' in sys.argv:
-            Updater.update()
+            Updater.update(restart=False)
         'no update needed'
         exit()
     if 'update-master' in sys.argv:
         Updater.init()
-        Updater.update_master()
+        Updater.update_master(restart=False)
         exit()
     if '-V' in sys.argv or 'version' in sys.argv:
         print(VERSION_TAG)

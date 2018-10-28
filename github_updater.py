@@ -48,12 +48,22 @@ class GithubUpdater:
             zip_ref.extractall(extracted_dir)
         os.unlink(zip_path)
         source_dir = os.path.join(extracted_dir, os.listdir(extracted_dir)[0])
-        files_from_to = {os.path.join(source_dir, filename): os.path.join(target_directory, filename)
-                         for filename in os.listdir(source_dir)}
+        files_from_to = {}
+
+        def process_dir(directory, dir_prefix=""):
+            for filename in os.listdir(directory):
+                file_path = os.path.abspath(os.path.join(source_dir, dir_prefix, filename))
+                if os.path.isfile(file_path):
+                    files_from_to[file_path] = os.path.abspath(os.path.join(target_directory, dir_prefix, filename))
+                elif os.path.isdir(file_path):
+                    process_dir(file_path, os.path.join(dir_prefix, filename))
+
+        process_dir(source_dir)
 
         for file_from, file_to in files_from_to.items():
             parent_dir = os.path.abspath(os.path.join(file_to, os.path.pardir))
             if not os.path.isdir(parent_dir):
                 os.makedirs(parent_dir)
+                pass
             shutil.move(file_from, file_to)
         shutil.rmtree(extracted_dir)
