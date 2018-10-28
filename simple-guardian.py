@@ -310,6 +310,8 @@ def login_with_server(url: str):
         return False, 'server returned unusable answer'
     ONLINE_DATA.update(server_data)
     ONLINE_DATA['loggedIn'] = True
+    # noinspection PyTypeChecker
+    ONLINE_DATA['server_url'] = url.split("/api/", 1)[0]
     with open(os.path.join(CONFIG_DIR, 'server.json'), 'w') as f:
         json.dump(ONLINE_DATA, f, indent=1)
     return True, 'Logged in'
