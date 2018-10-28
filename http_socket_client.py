@@ -43,10 +43,9 @@ class HSocket:
                         self.connected = True
                         self._run_listener('connect')
                     elif msg.get('action', '') == 'event':
-                        print(msg['name'], msg['data'])
                         self._run_listener(msg['name'], msg['data'])
                     elif msg.get('action', '') == 'set_max_msg_interval':
-                        self.__fetch_msg_max_time = msg['data']
+                        self.set_retry_interval(float(msg['data']))
 
         self.__thread = HSocketRecevierThread()
         self.__thread.start()
@@ -95,6 +94,9 @@ class HSocket:
         except requests.exceptions.ConnectionError:
             self.disconnect(reconnect=True)
 
+    def set_retry_interval(self, interval: float):
+        self._fetch_msg_max_time = interval
+
     def _get_message(self) -> dict or None:
         try:
             while True:
@@ -105,7 +107,8 @@ class HSocket:
                     return
                 data = request.json()
                 if data.get('action', '') != 'retry':
-                    self._last_message_time = time.time()
+                    if data.get('action', '') != 'set_max_msg_interval':
+                        self._last_message_time = time.time()
                     break
                 time.sleep(min(self._fetch_msg_max_time, max(1.0, time.time() - self._last_message_time)))
             return data
