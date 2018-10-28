@@ -15,6 +15,7 @@
   },
   "DOVECOT": {
     "filters": [
+      "%D:M% %D:D% %TIME% %HOSTNAME% auth: pam_unix(smtp:auth): authentication failure; logname= uid=0 euid=0 tty=dovecot ruser=%USER% rhost=%IP% user=%USER%",
       "%D:M% %D:D% %TIME% %HOSTNAME% auth: pam_unix(smtp:auth): authentication failure; logname= uid=0 euid=0 tty=dovecot ruser=%USER% rhost=%IP%"
     ],
     "logFile": "/var/log/auth.log"
