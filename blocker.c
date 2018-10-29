@@ -10,6 +10,26 @@
 #define indexCommand 1  
 #define indexIp 2
 
+/**
+ ____  _            _
+| __ )| | ___   ___| | _____ _ __
+|  _ \| |/ _ \ / __| |/ / _ \ '__|
+| |_) | | (_) | (__|   <  __/ |
+|____/|_|\___/ \___|_|\_\___|_|
+======================================
+Program that uses iptables to block or unblock IP
+Usage: blocker block/unblock IP
+
+Is supposed to be executed with root privileges, so as protection from executing by unauthorized user
+the program checks if you are user simpleguardian or root.
+Before blocking IP the program checks if it is not blocked yet to prevent duplicated entries.
+
+After compiling, it is recommended to run following commands:
+chown root:root blocker
+chmod +x blocker
+chmod u+s blocker
+*/
+
 void help(int exitStatus){
     printf("usage: blocker block/unblock ip\n");
     exit(exitStatus);

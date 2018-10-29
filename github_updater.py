@@ -7,42 +7,85 @@ import requests
 
 
 class GithubUpdater:
-    def __init__(self, repo_owner, repo_name):
+    """
+    Interface for obtaining latest source codes from GitHub repository
+    """
+
+    def __init__(self, repo_owner: str, repo_name: str):
+        """
+        Initializes the GitHub updater
+        :param repo_owner: owner of the GitHub repository to update from
+        :param repo_name: name of the GithHub repository to update from
+        """
         self.url_release = "https://api.github.com/repos/%s/%s/releases/latest" % (repo_owner, repo_name)
         self.url_master_zip = "https://github.com/%s/%s/archive/master.zip" % (repo_owner, repo_name)
 
-    def get_latest_release_data(self):
+    def get_latest_release_data(self) -> dict:
+        """
+        Uses GitHub API to obtain all data about latest release and return them as a dict
+        :return: all data about latest release and as a dict
+        """
         return requests.get(self.url_release).json()
 
-    def get_latest_release_tag(self):
+    def get_latest_release_tag(self) -> str:
+        """
+        Fetches the tag of the latest release
+        :return: the tag of the latest release from GitHub repository
+        """
         return self.get_latest_release_data()['tag_name']
 
-    def get_latest_release_zip(self, target_file):
+    def get_latest_release_zip(self, target_file: str) -> None:
+        """
+        Downloads the zip with a source code of the latest release from GitHub
+        :param target_file: where to download the zip file to
+        :return: None
+        """
         r = requests.get(self.get_latest_release_data()['zipball_url'], stream=True)
         with open(target_file, 'wb') as f:
             for chunk in r.iter_content(chunk_size=1024):
                 if chunk:
                     f.write(chunk)
 
-    def get_master(self, target_file):
+    def get_master(self, target_file: str) -> None:
+        """
+        Downloads the current master branch as a zip file
+        :param target_file: where to download the master branch zip file to
+        :return: None
+        """
         r = requests.get(self.url_master_zip, stream=True)
         with open(target_file, 'wb') as f:
             for chunk in r.iter_content(chunk_size=1024):
                 if chunk:
                     f.write(chunk)
 
-    def get_and_extract_newest_release_to_directory(self, target_directory):
+    def get_and_extract_newest_release_to_directory(self, target_directory: str) -> None:
+        """
+        Downloads and extracts newest release to specified directory
+        :param target_directory: here will be the code of the newest release placed
+        :return: None
+        """
         zip_file = tempfile.mkstemp()[1]
         self.get_latest_release_zip(zip_file)
         self._extract_zip(zip_file, target_directory)
 
-    def extract_master(self, target_directory):
+    def extract_master(self, target_directory: str) -> None:
+        """
+        Downloads and extracts code from master branch to specified directory
+        :param target_directory: here will be the code from master branch placed
+        :return: None
+        """
         zip_file = tempfile.mkstemp()[1]
         self.get_master(zip_file)
         self._extract_zip(zip_file, target_directory)
 
     @staticmethod
-    def _extract_zip(zip_path, target_directory):
+    def _extract_zip(zip_path: str, target_directory: str) -> None:
+        """
+        Extract zip with source code to target directory and deletes the zip file
+        :param zip_path: zip file to be extracted
+        :param target_directory: where to place the source code from the zip file
+        :return: None
+        """
         extracted_dir = tempfile.mkdtemp()
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(extracted_dir)
