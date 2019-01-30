@@ -9,6 +9,7 @@ from datetime import date
 from queue import Queue
 from subprocess import Popen
 from threading import Thread, Lock
+from typing import List, Dict
 
 import requests
 
@@ -46,25 +47,41 @@ if __name__ == '__main__':
     del sys.argv[-1]
 # End of the Runner
 
+# directory with configuration files
 CONFIG_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir, 'data'))
-PROFILES_DIR = os.path.join(CONFIG_DIR, 'profiles')
-CONFIG = {}
-ONLINE_DATA = {'loggedIn': False}
-PROFILES = {}
-PROFILES_LOCK = Lock()
-VERSION_TAG = "1.01"
+
+PROFILES_DIR = os.path.join(CONFIG_DIR, 'profiles')  # directory with profiles
+CONFIG = {}  # dictionary with loaded config in main()
+ONLINE_DATA: Dict[str, any] = {'loggedIn': False}  # data about the online server,
+PROFILES = {}  # type: {str: dict}
+PROFILES_LOCK = Lock()  # lock used when manipulating with profiles in async
+VERSION_TAG = "1.01"  # tag of current version
 
 
 class Database:
-    queue_in = Queue()
-    queue_out = Queue()
+    """
+    Synchronized worker with the SQLite database
+    """
+    queue_in = Queue()  # operations to perform
+    queue_out = Queue()  # data to return
     db_lock = Lock()
 
     @staticmethod
-    def init(file_path):
+    def init(file_path):  # type: (str) -> None
+        """
+        Initialize the static database
+        :param file_path: path to the saved file with database
+        :return: None
+        """
         class ThreadDatabase(Thread):
+            """
+            This thread runs in background and performs all operations with the database if needed
+            Creates new database if not exists yet
+            """
             def run(self):
                 connection = sqlite3.connect(file_path)
+
+                # create the database schema if not exists yet
                 connection.execute('CREATE TABLE IF NOT EXISTS "bans" ('
                                    '`id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,'
                                    '`time` INTEGER NOT NULL,'
@@ -76,37 +93,58 @@ class Database:
                                    '`profile` TEXT NOT NULL,'
                                    '`user` TEXT,'
                                    '`data` INTEGER NOT NULL);')
+
                 while AppRunning.is_running():
                     if not Database.queue_in.empty():
-                        data = Database.queue_in.get()
-                        if 'sql' in data:
+                        data = Database.queue_in.get()  # type: dict
+                        # the present key determines what time of data this is
+                        if 'sql' in data:  # perform SQL query
                             db_respond = list(connection.execute(data['sql'], data['param']))
-                        elif 'commit' in data:
+                        elif 'commit' in data:  # commit the saved data
                             connection.commit()
                             db_respond = True
-                        else:
+                        else:  # not sure what to do, just respond None
                             db_respond = None
+                        # return responded object
                         Database.queue_out.put(db_respond)
                     AppRunning.sleep_while_running(0.1)
 
+        # start the background thread with database connection
         ThreadDatabase().start()
 
     @staticmethod
-    def execute(command, data=()):
+    def execute(command, data=()):  # type: (str, tuple) -> list
+        """
+        Executes the command on database
+        :param command: SQL command to be executed
+        :param data: tuple of data that are safely entered into the SQL command to prevent SQL injection
+        :return: list of returned rows
+        """
         Database.db_lock.acquire()
         Database.queue_in.put({'sql': command, 'param': data})
-        respond = Database.queue_out.get()
+        respond = Database.queue_out.get()  # type: list
         Database.db_lock.release()
         return respond
 
     @staticmethod
-    def json(command, table, data=()):
+    def json(command, table, data=()):  # type: (str, str, tuple) -> list
+        """
+        Performs SQL query on table and returns the result as list of dictionaries
+        :param command: SQL command to be executed
+        :param table: target table of the command. From this table the names of columns are parsed
+        :param data: tuple of data that are safely entered into the SQL command to prevent SQL injection
+        :return: list of rows, rows are dictionaries where keys are names of columns
+        """
         columns = [column_data[1] for column_data in Database.execute("PRAGMA table_info(%s)" % table)]
         records = Database.execute(command, data)
         return [{columns[i]: value for i, value in enumerate(record)} for record in records]
 
     @staticmethod
     def commit():
+        """
+        Commits the databse to the disc
+        :return: None
+        """
         Database.db_lock.acquire()
         Database.queue_in.put({'commit': True})
         respond = Database.queue_out.get()
@@ -115,26 +153,48 @@ class Database:
 
 
 class AppRunning:
+    """
+    This class signalizes or sets if this program's threads should run or should be terminated
+    """
     app_running = [True]
 
     @staticmethod
     def is_running() -> bool:
+        """
+        Tests if the program should be running
+        :return: True if the program should be running, False if it should terminate itself
+        """
         return len(AppRunning.app_running) > 0
 
     @staticmethod
     def set_running(val: bool):
+        """
+        Sets if the program should be running
+        :param val: True if the program should be running, False if it should terminate itself
+        :return: None
+        """
         if val:
             AppRunning.app_running.append(True)
         else:
             AppRunning.app_running.clear()
 
     @staticmethod
-    def exit(exit_code):
+    def exit(exit_code):  # type: (int) -> None
+        """
+        Signalizes all threads to exit and then exists with specified exit code
+        :param exit_code:
+        :return: NOne
+        """
         AppRunning.set_running(False)
         exit(exit_code)
 
     @staticmethod
-    def sleep_while_running(seconds):
+    def sleep_while_running(seconds):  # type: (float) -> None
+        """
+        Performs a sleep operation on calling thread. Sleep is interrupted if the program is supposed to terminate
+        :param seconds: how long should the thread sleep
+        :return: None
+        """
         while AppRunning.is_running() and seconds > 0:
             sleep = min(1, seconds)
             time.sleep(sleep)
@@ -142,22 +202,46 @@ class AppRunning:
 
 
 class IPBlocker:
-    block_command_path = './blocker'
+    """
+    Blocks/unblocks IPs
+    """
+    block_command_path = './blocker'  # path to the executable that blocks the IPs
 
     @staticmethod
     def list_blocked_ips() -> set:
+        """
+        Lists the blocked IPs from database
+        :return: set of the blocked IPs
+        """
         return {record[0] for record in Database.execute('SELECT ip FROM bans')}
 
     @staticmethod
-    def ip_is_blocked(ip):
+    def ip_is_blocked(ip):  # type: (str) -> bool
+        """
+        Tests if the IP is blocked
+        :param ip: the IP to test
+        :return: True if the IP is stated as blocked in the database, False otherwise
+        """
         return Database.execute('SELECT COUNT(*) FROM bans WHERE ip = ?', (ip,))[0][0] != 0
 
     @classmethod
     def block_all_banned(cls):
+        """
+        Blocks all IPs marked as banned in database
+        Useful during the startup of this program
+        :return: None
+        """
         [cls.block(ip, commit_db=False, use_db=False) for ip in cls.list_blocked_ips()]
 
     @classmethod
-    def block(cls, ip, commit_db=True, use_db=True):
+    def block(cls, ip, commit_db=True, use_db=True):  # type: (str, bool, bool) -> bool
+        """
+        States the IP as blocked in database if enabled and blocks access to this server
+        :param ip: IP to block
+        :param commit_db: if set to True, the database will be saved to disc after query
+        :param use_db:  if set to True, the IP will be marked as blocked id database
+        :return: True if blocking was successful, False if already blocked
+        """
         if use_db and cls.ip_is_blocked(ip):
             return False
         subprocess.run([cls.block_command_path, 'block', ip])
@@ -168,7 +252,13 @@ class IPBlocker:
         return True
 
     @classmethod
-    def unblock(cls, ip, commit_db=True):
+    def unblock(cls, ip, commit_db=True):  # type: (str, bool) -> bool
+        """
+        Unblocks already blocked IP
+        :param ip: blocked IP to unblock
+        :param commit_db: if set to True, the database will be saved to disc after query
+        :return: True if unblock was successful, False if the IP is not blocked
+        """
         if not cls.ip_is_blocked(ip):
             return False
         subprocess.run([cls.block_command_path, 'unblock', ip])
@@ -179,26 +269,40 @@ class IPBlocker:
 
 
 class ThreadScanner(Thread):
+    """
+    This thread performs the scanning of the logs, looking for attacks and blocking
+    """
     def run(self):
         while AppRunning.is_running():
             print('scanning for attacks')
             commit_db = False
+
             PROFILES_LOCK.acquire()
             profiles_copy = dict(PROFILES)
             PROFILES_LOCK.release()
+
             for profile, profile_data in profiles_copy.items():
+
                 parser = log_manipulator.LogParser(profile_data['logFile'], profile_data['filters'])
                 try:
                     attacks = parser.parse_attacks(max_age=profile_data['scanRange'] * 2)
                 except FileNotFoundError:
                     continue
-                known_attack_timestamps = []
-                for ip, ip_attacks in attacks.items():
+
+                # times of parsed attacks. Every time is unique identification key, if two attacks were made at the same
+                # timestamp, then a millisecond is added to one of them to ensure the uniqueness
+                known_attack_timestamps = []  # type: List[int]
+
+                for ip, ip_attacks in attacks.items():  # IP and list of IP's attacks
                     for i, attack_data in enumerate(ip_attacks):
+                        # TIMESTAMP must be unique
                         while attack_data['TIMESTAMP'] in known_attack_timestamps:
                             attack_data['TIMESTAMP'] += 1
                         known_attack_timestamps.append(attack_data['TIMESTAMP'])
                         attacks[ip][i].update(attack_data)
+
+                        # Check if this attack already exists in our database and if not add it and set the db to
+                        # save to disc after everything is added
                         if Database.execute('SELECT COUNT(*) FROM attacks WHERE ip = ? AND time = ? AND profile = ?',
                                             (ip, attack_data['TIMESTAMP'], profile))[0][0] == 0:
                             Database.execute('INSERT INTO `attacks`(`time`,`ip`,`data`,`profile`,`user`) '
@@ -207,10 +311,12 @@ class ThreadScanner(Thread):
                                               attack_data['USER'] if 'USER' in attack_data else None))
                             commit_db = True
 
+                # get the offenders who shall be blocked
                 offenders = parser.get_habitual_offenders(profile_data['maxAttempts'], profile_data['scanRange'],
                                                           attacks=attacks)
-                for offender_ip in offenders.keys():
+                for offender_ip in offenders.keys():  # block their IPs
                     if IPBlocker.block(offender_ip, commit_db=False):
+                        # do not commit the DB now, commit only after everyone is blocked
                         commit_db = True
             if commit_db:
                 Database.commit()
@@ -219,23 +325,43 @@ class ThreadScanner(Thread):
 
 
 class Updater:
-    _updater = None
+    """
+    Updater of this Simple Guardian client
+    """
+    _updater = None  # type: github_updater.GithubUpdater
 
     @staticmethod
     def init():
+        """
+        Initialize the Updater with data from config
+        :return: None
+        """
         Updater._updater = github_updater.GithubUpdater(CONFIG['updater']['githubOwner'],
                                                         CONFIG['updater']['githubRepo'])
 
     @staticmethod
-    def update_available():
+    def update_available() -> bool:
+        """
+        Check the most recent version tag from the server and compare it to the VERSION_TAG variable
+        :return: True if local and remote version tags differ, False if they are the same
+        """
         return VERSION_TAG != Updater._updater.get_latest_release_tag()
 
     @staticmethod
     def get_latest_name() -> str:
+        """
+        Gets the name of the latest release tag
+        :return: the name of the latest release tag
+        """
         return Updater._updater.get_latest_release_tag()
 
     @staticmethod
-    def update(restart=True):
+    def update(restart=True):  # type: (bool) -> None
+        """
+        Updates to the latest release from GitHub repository
+        :param restart: if set to True, this program will automatically restart to new version after copying new files
+        :return: None
+        """
         print('starting update')
         this_directory = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir))
         Updater._updater.get_and_extract_newest_release_to_directory(this_directory)
@@ -245,7 +371,12 @@ class Updater:
         print('update finished')
 
     @staticmethod
-    def update_master(restart=True):
+    def update_master(restart=True):  # type: (bool) -> None
+        """
+        Updates to the master branch from GitHub repository
+        :param restart: if set to True, this program will automatically restart to new version after copying new files
+        :return: None
+        """
         print('starting update to the master branch')
         this_directory = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir))
         Updater._updater.extract_master(this_directory)
@@ -255,7 +386,14 @@ class Updater:
         print('update finished')
 
 
-def list_attacks(before=None, max_limit=None):
+def list_attacks(before=None, max_limit=None):  # type: (int, int) -> List[dict]
+    """
+    Lists attacks from database and returns them as the list of the rows
+    Rows are dictionaries where keys are column names
+    :param before: maximum id of the attack, if None then no limit is set
+    :param max_limit: maximum number of returned results, if set to None then all results are returned
+    :return: list of the rows of attacks from the database, rows are dictionaries where keys are column names
+    """
     sql = 'SELECT * FROM attacks'
     if before is not None:
         sql += ' WHERE id < ?'
@@ -265,7 +403,14 @@ def list_attacks(before=None, max_limit=None):
     return Database.json(sql, 'attacks', (before,) if before is not None else ())
 
 
-def list_bans(before=None, max_limit=None):
+def list_bans(before=None, max_limit=None):  # type: (int, int) -> List[dict]
+    """
+    Lists bans from database and returns them as the list of the rows
+    Rows are dictionaries where keys are column names
+    :param before: maximum id of the attack, if None then no limit is set
+    :param max_limit: maximum number of returned results, if set to None then all results are returned
+    :return: list of the rows of bans from the database, rows are dictionaries where keys are column names
+    """
     sql = 'SELECT * FROM bans'
     if before is not None:
         sql += ' WHERE id < ?'
@@ -279,7 +424,11 @@ def list_bans(before=None, max_limit=None):
     return bans
 
 
-def load_profiles():
+def load_profiles():  # type: () -> None
+    """
+    Loads profiles from disc
+    :return: None
+    """
     PROFILES_LOCK.acquire()
     if not os.path.exists(PROFILES_DIR):
         os.makedirs(PROFILES_DIR)
@@ -301,7 +450,12 @@ def load_profiles():
     PROFILES_LOCK.release()
 
 
-def login_with_server(url: str):
+def pair_with_server(url: str) -> (bool, str):
+    """
+    Pairs this device with an account on the Simple Guardian server
+    :param url: URL generated by creating a new device on Simple Guardian Server web
+    :return: tuple (bool, str): True if logged in successfully, False if not, explaining message string:
+    """
     try:
         server_data = requests.post(url).json()
     except requests.exceptions.ConnectionError:
@@ -317,36 +471,75 @@ def login_with_server(url: str):
     return True, 'Logged in'
 
 
-def init_online():
+def init_online():  # type: () -> None
+    """
+    This function initializes the online part communicating with SG server. Must be already paired with account on
+    the server in order to initialize online part
+    :return: None
+    """
     socket = HSocket(ONLINE_DATA['server_url'], auto_connect=False)
 
     class ThreadDisconnectOnProgramEnd(Thread):
+        """
+        This thread forces disconnection of the socket when the client is supposed to end
+        """
         def run(self):
             while AppRunning.is_running():
                 AppRunning.sleep_while_running(2)
             print('disconnecting from server')
             socket.disconnect()
 
-    ThreadDisconnectOnProgramEnd().start()
+    ThreadDisconnectOnProgramEnd().start()  # run the thread that will close the socket on program's exit
 
-    def connect():
+    def connect():  # type: () -> None
+        """
+        Fired on successful connection to the server.
+        Send authorisation request to the server.
+        :return: None
+        """
         socket.emit('login', json.dumps({'uid': ONLINE_DATA['device_id'], 'secret': ONLINE_DATA['device_secret']}))
 
-    def login(ok):
+    def login(ok):  # type: (bool) -> None
+        """
+        Fired when server responds on our authorisation request
+        Prints the result of the login to the console
+        :param ok: True if our login is successful, False if there was something wrong with our request
+        :return: None
+        """
         if not ok:
             print('login with server seems expired, please fix this')
             return
         print('login with server ok')
 
-    def get_attacks(data):
+    def get_attacks(data):  # type: (dict) -> None
+        """
+        Fired when the remote user asks us about saved attacks from SG Server's web interface
+        Responds him with results from our database
+        :param data: dictionary. Keys are 'before' - max id of the attack in database and
+        'userSid' - id of the user on the SG's web interface
+        :return: None
+        """
         attacks = list_attacks(data['before'], 100)
         socket.emit('attacks', json.dumps({'userSid': data['userSid'], 'attacks': attacks}))
 
-    def get_bans(data):
+    def get_bans(data):  # type: (dict) -> None
+        """
+        Fired when the remote user asks us about saved bans from SG Server's web interface
+        Responds him with results from our database
+        :param data: dictionary. Keys are 'before' - max id of the bans in database and
+        'userSid' - socket's id of the user on the SG's web interface
+        :return: None
+        """
         bans = list_bans(data['before'], 100)
         socket.emit('bans', json.dumps({'userSid': data['userSid'], 'bans': bans}))
 
-    def get_statistic_info(sid):
+    def get_statistic_info(sid):  # type: (str) -> None
+        """
+        User on the SG server's web interface wants to know how many attacks and bans were today and total
+        Send him those data
+        :param sid: socket's id of the user on the SG's web interface
+        :return: None
+        """
         attacks_total = Database.execute('SELECT COUNT(*) FROM attacks')[0]
         bans_total = Database.execute('SELECT COUNT(*) FROM bans')[0]
 
@@ -360,26 +553,50 @@ def init_online():
                 'attacks': {'total': attacks_total, 'today': attacks_today}}}
         ))
 
-    def config(data):
+    def config(data):  # type: (dict) -> None
+        """
+        Server sends us new dictionary with profiles. Save it and apply the new profiles
+        :param data: dictionary with profiles
+        :return:  None
+        """
         PROFILES_LOCK.acquire()
         with open(os.path.join(PROFILES_DIR, 'online.json'), 'w') as f:
             json.dump(json.loads(data), f, indent=2)
         PROFILES_LOCK.release()
         load_profiles()
 
-    def update():
+    def update():  # type: () -> None
+        """
+        Server asks us to update to the newest release from GitHub repo
+        :return: None
+        """
         Updater.update()
 
-    def update_master():
+    def update_master():  # type: () -> None
+        """
+        Server asks us to update to the master branch from GitHub repo
+        :return: None
+        """
         Updater.update_master()
 
-    def unblock_ip(ip):
+    def unblock_ip(ip):  # type: (str) -> None
+        """
+        Server asks us to unblock blocked IP. Ok.
+        :param ip: IP address to unblock
+        :return: None
+        """
         IPBlocker.unblock(ip)
 
-    def get_update_information(user_sid):
+    def get_update_information(user_sid):  # type: (str) -> None
+        """
+        User on the SG server's web interface wants to know our version and the newest version available
+        :param user_sid: socket's id of the user on the SG's web interface
+        :return: None
+        """
         socket.emit('update_info', json.dumps({'userSid': user_sid, 'versionCurrent': VERSION_TAG,
                                                'versionLatest': Updater.get_latest_name()}))
 
+    # initialize all handlers and then connect
     socket.on('connect', connect)
     socket.on('login', login)
     socket.on('getAttacks', get_attacks)
@@ -394,6 +611,10 @@ def init_online():
 
 
 def cli():
+    """
+    Run CLI
+    :return: None
+    """
     del sys.argv[1]
 
     if 'uninstall' in sys.argv:
@@ -415,12 +636,13 @@ def cli():
         print('-V/version         ...........   prints version and exits')
         exit()
 
+    # commands below require root privileges
     if os.geteuid() != 0:
         print('this option must be executed as root')
         exit(1)
 
     if 'login' in sys.argv:
-        print(login_with_server(sys.argv[sys.argv.index('login') + 1])[1])
+        print(pair_with_server(sys.argv[sys.argv.index('login') + 1])[1])
         exit()
     if 'update' in sys.argv:
         Updater.init()
@@ -472,11 +694,13 @@ def main():
     load_profiles()
     print('Profiles loaded')
 
+    # Initialize database
     Database.init(os.path.join(CONFIG_DIR, 'db.db'))
 
-    print('Blocking all previously blocked IPs')
+    print('Blocking all IPs saved in database')
     IPBlocker.block_all_banned()
 
+    # Check for updates and perform automatic update if enabled and available
     Updater.init()
     update_available = Updater.update_available()
     print('You are up to date' if not update_available
@@ -484,7 +708,10 @@ def main():
     if update_available and CONFIG.get('updater', {}).get('autoupdate', False):
         Updater.update()
 
+    # Start scanning of the logs
     ThreadScanner().start()
+
+    # Terminate the program when CTRL+C is pressed
     while AppRunning.is_running():
         try:
             AppRunning.sleep_while_running(10)
