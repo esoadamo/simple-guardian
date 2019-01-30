@@ -3,14 +3,6 @@ import time
 from datetime import datetime
 
 
-def remove_whitespaces(string: str):
-    while string[0].isspace():
-        string = string[1:]
-    while string[-1].isspace():
-        string = string[:-1]
-    return string
-
-
 class LogParser:
     def __init__(self, file_log: str, rules: list, service_name=None):
         self.file_log = file_log
@@ -84,7 +76,7 @@ class Rule:
             return None
         # noinspection PyTypeChecker
         for i, variable in enumerate(self.__rule_variables):
-            data[variable] = remove_whitespaces(variable_search.group(i + 1))
+            data[variable] = variable_search.group(i + 1).strip()
 
         if self.__service_name is not None:
             data['SERVICE'] = self.__service_name
