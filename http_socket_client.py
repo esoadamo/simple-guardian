@@ -1,8 +1,7 @@
 import json
+import requests
 import time
 from threading import Thread
-
-import requests
 
 
 class HSocket:
@@ -138,7 +137,7 @@ class HSocket:
         except requests.exceptions.ConnectionError:
             self.disconnect(reconnect=True)
 
-    def set_retry_interval(self, interval: float) -> None:
+    def set_retry_interval(self, interval):  # type: (float) -> None
         """
         Sets the maximum time in seconds before asking the server for new messages
         :param interval: maximum time in seconds before asking the server for new messages
@@ -146,7 +145,7 @@ class HSocket:
         """
         self._fetch_msg_max_time = interval
 
-    def _get_message(self) -> dict or None:
+    def _get_message(self):  # type: () -> dict or None
         """
         Waits until the message from server for this client is available or some error occurs and then returns
         the fetched message or None on fail

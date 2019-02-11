@@ -79,7 +79,7 @@ class Rule:
     variables from that line
     """
 
-    def __init__(self, filter_string: str, service_name=None):
+    def __init__(self, filter_string, service_name=None):  # type: (str, str or None) -> None
         """
         Initializes this rule/filter
         :param filter_string: string representation of this rule/filter with all variables stated as %VAR_NAME%
@@ -101,7 +101,7 @@ class Rule:
         # Remove %'s from variable names
         self.__rule_variables = [var[1:-1] for var in self.__rule_variables]
 
-    def test(self, log_line: str) -> bool:
+    def test(self, log_line):  # type: (str) -> bool
         """
         Test this Rule against a line from log file if it fits
         :param log_line: line from a log file
