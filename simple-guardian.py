@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import json
 import os
-import requests
 import sqlite3
 import subprocess
 import sys
@@ -11,6 +10,8 @@ from queue import Queue
 from subprocess import Popen
 from threading import Thread, Lock
 from typing import List, Dict, Set
+
+import requests
 
 import github_updater
 import log_manipulator
@@ -54,7 +55,7 @@ CONFIG = {}  # dictionary with loaded config in main()
 ONLINE_DATA = {'loggedIn': False}  # type: Dict[str, any] # data about the online server,
 PROFILES = {}  # type: {str: dict}
 PROFILES_LOCK = Lock()  # lock used when manipulating with profiles in async
-VERSION_TAG = "1.02_security_fix"  # tag of current version
+VERSION_TAG = "1.1"  # tag of current version
 
 
 class Database:
@@ -195,7 +196,7 @@ class AppRunning:
         :return: None
         """
         while AppRunning.is_running() and seconds > 0:
-            sleep = min(1, seconds)
+            sleep = min(1.0, seconds)
             time.sleep(sleep)
             seconds -= sleep
 
@@ -274,6 +275,7 @@ class ThreadScanner(Thread):
     def run(self):
         while AppRunning.is_running():
             print('scanning for attacks')
+            time_scan_start = time.time()
             commit_db = False
 
             PROFILES_LOCK.acquire()
@@ -281,10 +283,15 @@ class ThreadScanner(Thread):
             PROFILES_LOCK.release()
 
             for profile, profile_data in profiles_copy.items():
+                if 'parser' not in profile_data:  # link the parser with the profile
+                    profile_data['parser'] = log_manipulator.LogParser(profile_data['logFile'], profile_data['filters'])
+                    PROFILES_LOCK.acquire()
+                    if profile in PROFILES:  # propagate the change into upcoming scans
+                        PROFILES[profile]['parser'] = profile_data['parser']
+                    PROFILES_LOCK.release()
 
-                parser = log_manipulator.LogParser(profile_data['logFile'], profile_data['filters'])
                 try:
-                    attacks = parser.parse_attacks(max_age=profile_data['scanRange'] * 2)
+                    attacks = profile_data['parser'].parse_attacks(max_age=profile_data['scanRange'] * 2)
                 except FileNotFoundError:
                     continue
 
@@ -311,15 +318,16 @@ class ThreadScanner(Thread):
                             commit_db = True
 
                 # get the offenders who shall be blocked
-                offenders = parser.get_habitual_offenders(profile_data['maxAttempts'], profile_data['scanRange'],
-                                                          attacks=attacks)
+                offenders = profile_data['parser'].get_habitual_offenders(profile_data['maxAttempts'],
+                                                                          profile_data['scanRange'],
+                                                                          attacks=attacks)
                 for offender_ip in offenders.keys():  # block their IPs
                     if IPBlocker.block(offender_ip, commit_db=False):
                         # do not commit the DB now, commit only after everyone is blocked
                         commit_db = True
             if commit_db:
                 Database.commit()
-            print('scanning for attacks completed')
+            print('scanning for attacks completed, took %.1f seconds' % (time.time() - time_scan_start))
             AppRunning.sleep_while_running(CONFIG['scanTime'])
 
 
@@ -428,7 +436,9 @@ def load_profiles():  # type: () -> None
     Loads profiles from disc
     :return: None
     """
+    print('Loading profiles')
     PROFILES_LOCK.acquire()
+    PROFILES.clear()
     if not os.path.exists(PROFILES_DIR):
         os.makedirs(PROFILES_DIR)
     else:

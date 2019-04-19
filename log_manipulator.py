@@ -1,6 +1,8 @@
 import re
 import time
 from datetime import datetime
+from hashlib import md5
+from os.path import getmtime, getsize
 from typing import List
 
 
@@ -19,6 +21,11 @@ class LogParser:
         """
         self.file_log = file_log
         self.rules = [rule if type(rule) == Rule else Rule(rule, service_name) for rule in rules]
+        self._last_file_size = 0
+        self._last_file_modification_date = None
+
+        # if this last bytes are same then we are sure the file was not modified
+        self._last_bytes = {'hash': None, 'len': 0}
 
     def parse_attacks(self, max_age=None):  # type: (float) -> dict
         """
@@ -27,8 +34,45 @@ class LogParser:
         :return: dictionary. Key is the IP that attacked and value is list of dictionaries with data about every attack
         """
         attacks = {}
+
+        curr_file_size = getsize(self.file_log)
+        curr_file_modification_time = getmtime(self.file_log)
+
+        if self._last_file_size == curr_file_size and curr_file_modification_time == self._last_file_modification_date:
+            # it seems that the files has not changed so skip analyzing it
+            return attacks
+
+        continue_in_scanning = True  # when set to True, only new content in file is analyzed
+
+        if self._last_file_size > curr_file_size:
+            # when the current file is smaller, something has happened to it. We will rescan it to be sure
+            continue_in_scanning = False
+            self.force_rescan()
+
+        if self._last_file_size == curr_file_size and self._last_file_modification_date != curr_file_modification_time:
+            # the file has the same size but was still modified, we better rescan it
+            continue_in_scanning = False
+            self.force_rescan()
+
         with open(self.file_log, 'r') as f:
-            log_lines = f.read().splitlines()
+            if continue_in_scanning and self._last_bytes['hash'] is not None:
+                # check last few bytes if they are same
+                f.seek(self._last_file_size - self._last_bytes['len'])
+                if md5(f.read(self._last_bytes['len']).encode('utf8')).hexdigest() != self._last_bytes['hash']:
+                    # nope, last few bytes differ, something seems really odd about this file. Better rescan it
+                    self.force_rescan()
+
+            f.seek(self._last_file_size)  # skip all already analyzed content
+            new_content = f.read()
+
+        # save last ten bytes so we can know if the file is still the same during new analyze
+        content_end = new_content[-256:]
+        self._last_bytes['hash'] = md5(content_end.encode('utf8')).hexdigest()
+        self._last_bytes['len'] = len(content_end)
+
+        log_lines = new_content.splitlines()
+        del new_content, content_end
+
         for log_line in log_lines:
             for rule in self.rules:
                 variables = rule.get_variables(log_line)
@@ -41,6 +85,9 @@ class LogParser:
                     item.append(variables)
                     attacks[attacker_ip] = item
                     break
+
+        self._last_file_modification_date = curr_file_modification_time
+        self._last_file_size = curr_file_size
 
         return attacks
 
@@ -71,6 +118,14 @@ class LogParser:
                     habitual_offenders[ip] = attack_list
 
         return habitual_offenders
+
+    def force_rescan(self):  # type: () -> None
+        """
+        Resets progress info about log file, forcing program to perform the next scan from the beginning
+        :return: None
+        """
+        self._last_file_size = 0
+        self._last_file_modification_date = None
 
 
 class Rule:
