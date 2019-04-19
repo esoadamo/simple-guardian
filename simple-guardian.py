@@ -336,6 +336,7 @@ class Updater:
     Updater of this Simple Guardian client
     """
     _updater = None  # type: github_updater.GithubUpdater
+    _excluded_file_names = ["config.json", "blocker"]
 
     @staticmethod
     def init():
@@ -371,7 +372,7 @@ class Updater:
         """
         print('starting update')
         this_directory = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir))
-        Updater._updater.get_and_extract_newest_release_to_directory(this_directory, ['blocker'])
+        Updater._updater.get_and_extract_newest_release_to_directory(this_directory, Updater._excluded_file_names)
         if restart:
             print('update finished, restarting')
             AppRunning.exit(42)
@@ -386,7 +387,7 @@ class Updater:
         """
         print('starting update to the master branch')
         this_directory = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir))
-        Updater._updater.extract_master(this_directory, ['blocker'])
+        Updater._updater.extract_master(this_directory, Updater._excluded_file_names)
         if restart:
             print('update finished, restarting')
             AppRunning.exit(42)

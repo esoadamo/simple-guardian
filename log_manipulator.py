@@ -1,8 +1,11 @@
+import json
 import re
 import time
 from datetime import datetime
 from hashlib import md5
 from os.path import getmtime, getsize
+from tempfile import TemporaryFile
+from threading import Lock
 from typing import List
 
 
@@ -24,8 +27,13 @@ class LogParser:
         self._last_file_size = 0
         self._last_file_modification_date = None
 
+        self._attack_cache_file = TemporaryFile()  # here will all attacks stay cached
+        self._attack_cache_file_lock = Lock()
+
         # if this last bytes are same then we are sure the file was not modified
         self._last_bytes = {'hash': None, 'len': 0}
+
+        self.force_rescan()
 
     def parse_attacks(self, max_age=None):  # type: (float) -> dict
         """
@@ -89,6 +97,15 @@ class LogParser:
         self._last_file_modification_date = curr_file_modification_time
         self._last_file_size = curr_file_size
 
+        self._attack_cache_file_lock.acquire()
+        self._attack_cache_file.seek(0)
+        attacks.update(json.loads(self._attack_cache_file.read().decode('utf8')))
+        self._attack_cache_file.seek(0)
+        self._attack_cache_file.truncate(0)
+        self._attack_cache_file.write(json.dumps(attacks).encode('utf8'))
+        self._attack_cache_file.flush()
+        self._attack_cache_file_lock.release()
+
         return attacks
 
     def get_habitual_offenders(self, min_attack_attempts, attack_attempts_time, max_age=None, attacks=None):
@@ -126,6 +143,12 @@ class LogParser:
         """
         self._last_file_size = 0
         self._last_file_modification_date = None
+        self._attack_cache_file_lock.acquire()
+        self._attack_cache_file.seek(0)
+        self._attack_cache_file.truncate(0)
+        self._attack_cache_file.write(json.dumps({}).encode('utf8'))
+        self._attack_cache_file.flush()
+        self._attack_cache_file_lock.release()
 
 
 class Rule:
