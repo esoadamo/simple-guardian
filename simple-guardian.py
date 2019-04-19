@@ -55,7 +55,7 @@ CONFIG = {}  # dictionary with loaded config in main()
 ONLINE_DATA = {'loggedIn': False}  # type: Dict[str, any] # data about the online server,
 PROFILES = {}  # type: {str: dict}
 PROFILES_LOCK = Lock()  # lock used when manipulating with profiles in async
-VERSION_TAG = "1.1"  # tag of current version
+VERSION_TAG = "1.11"  # tag of current version
 
 
 class Database:
@@ -371,7 +371,7 @@ class Updater:
         """
         print('starting update')
         this_directory = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir))
-        Updater._updater.get_and_extract_newest_release_to_directory(this_directory)
+        Updater._updater.get_and_extract_newest_release_to_directory(this_directory, ['blocker'])
         if restart:
             print('update finished, restarting')
             AppRunning.exit(42)
@@ -386,7 +386,7 @@ class Updater:
         """
         print('starting update to the master branch')
         this_directory = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir))
-        Updater._updater.extract_master(this_directory)
+        Updater._updater.extract_master(this_directory, ['blocker'])
         if restart:
             print('update finished, restarting')
             AppRunning.exit(42)

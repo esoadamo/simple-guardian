@@ -1,8 +1,10 @@
 import os
-import requests
 import shutil
 import tempfile
 import zipfile
+from typing import List
+
+import requests
 
 
 class GithubUpdater:
@@ -57,34 +59,39 @@ class GithubUpdater:
                 if chunk:
                     f.write(chunk)
 
-    def get_and_extract_newest_release_to_directory(self, target_directory):  # type: (str) -> None
+    def get_and_extract_newest_release_to_directory(self, target_directory, skip_file_names=None):
+        # type: (str, List[str] or None) -> None
         """
         Downloads and extracts newest release to specified directory
         :param target_directory: here will be the code of the newest release placed
+        :param skip_file_names: files with names inside this list will not be extracted
         :return: None
         """
         zip_file = tempfile.mkstemp()[1]
         self.get_latest_release_zip(zip_file)
-        self._extract_zip(zip_file, target_directory)
+        self._extract_zip(zip_file, target_directory, skip_file_names)
 
-    def extract_master(self, target_directory):  # type: (str) -> None
+    def extract_master(self, target_directory, skip_file_names=None):  # type: (str, List[str] or None) -> None
         """
         Downloads and extracts code from master branch to specified directory
         :param target_directory: here will be the code from master branch placed
+        :param skip_file_names: files with names inside this list will not be extracted
         :return: None
         """
         zip_file = tempfile.mkstemp()[1]
         self.get_master(zip_file)
-        self._extract_zip(zip_file, target_directory)
+        self._extract_zip(zip_file, target_directory, skip_file_names)
 
     @staticmethod
-    def _extract_zip(zip_path, target_directory):  # type: (str, str) -> None
+    def _extract_zip(zip_path, target_directory, skip_file_names=None):  # type: (str, str, List[str] or None) -> None
         """
         Extract zip with source code to target directory and deletes the zip file
         :param zip_path: zip file to be extracted
         :param target_directory: where to place the source code from the zip file
+        :param skip_file_names: files with names inside this list will not be extracted
         :return: None
         """
+        skip_file_names = skip_file_names if skip_file_names is not None else []
         extracted_dir = tempfile.mkdtemp()
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(extracted_dir)
@@ -96,6 +103,8 @@ class GithubUpdater:
             for filename in os.listdir(directory):
                 file_path = os.path.abspath(os.path.join(source_dir, dir_prefix, filename))
                 if os.path.isfile(file_path):
+                    if filename in skip_file_names:
+                        continue
                     files_from_to[file_path] = os.path.abspath(os.path.join(target_directory, dir_prefix, filename))
                 elif os.path.isdir(file_path):
                     process_dir(file_path, os.path.join(dir_prefix, filename))
