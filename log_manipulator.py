@@ -3,6 +3,7 @@ import re
 import time
 from datetime import datetime
 from hashlib import md5
+from logging import Logger
 from os.path import getmtime, getsize
 from tempfile import TemporaryFile
 from threading import Lock
@@ -14,16 +15,19 @@ class LogParser:
     Class for parsing information about attacks from log files
     """
 
-    def __init__(self, file_log, rules, service_name=None):  # type: (str, List[str], str) -> None
+    def __init__(self, file_log, rules, service_name=None, logger=None):  # type: (str, List[str], str, Logger) -> None
         """
         Initialize the log parser
         :param file_log: path to the file with logs
         :param rules: list of string filters/rules
         :param service_name: optional name of the service. If not specified then found attacks are not assigned to any
         service
+        :param logger: optional logger. If specified, LogParsers fires messages into him
         """
         self.file_log = file_log
         self.rules = [rule if type(rule) == Rule else Rule(rule, service_name) for rule in rules]
+        self.logger = logger
+
         self._last_file_size = 0
         self._last_file_modification_date = None
 
@@ -41,12 +45,17 @@ class LogParser:
         :param max_age: optional, in seconds. If attack is older as this then it is ignored
         :return: dictionary. Key is the IP that attacked and value is list of dictionaries with data about every attack
         """
+        if self.logger is not None:
+            self.logger.debug('parsing attacks for %s' % self.file_log)
+
         attacks = {}
 
         curr_file_size = getsize(self.file_log)
         curr_file_modification_time = getmtime(self.file_log)
 
         if self._last_file_size == curr_file_size and curr_file_modification_time == self._last_file_modification_date:
+            if self.logger is not None:
+                self.logger.debug('nothing changed, nothing new to parse')
             # it seems that the files has not changed so skip analyzing it
             return attacks
 
@@ -54,29 +63,38 @@ class LogParser:
 
         if self._last_file_size > curr_file_size:
             # when the current file is smaller, something has happened to it. We will rescan it to be sure
+            if self.logger is not None:
+                self.logger.debug('file went smaller since las scan, rescan it')
             continue_in_scanning = False
             self.force_rescan()
 
         if self._last_file_size == curr_file_size and self._last_file_modification_date != curr_file_modification_time:
             # the file has the same size but was still modified, we better rescan it
+            if self.logger is not None:
+                self.logger.debug('file is the same size but it was modified,rescan it')
             continue_in_scanning = False
             self.force_rescan()
 
         with open(self.file_log, 'r') as f:
             if continue_in_scanning and self._last_bytes['hash'] is not None:
                 # check last few bytes if they are same
-                f.seek(self._last_file_size - self._last_bytes['len'])
+                f.seek(self._last_file_size - self._last_bytes['len'] - 5)
                 if md5(f.read(self._last_bytes['len']).encode('utf8')).hexdigest() != self._last_bytes['hash']:
                     # nope, last few bytes differ, something seems really odd about this file. Better rescan it
+                    if self.logger is not None:
+                        self.logger.debug('last few scanned bytes differ, rescan it')
                     self.force_rescan()
 
             f.seek(self._last_file_size)  # skip all already analyzed content
             new_content = f.read()
 
         # save last ten bytes so we can know if the file is still the same during new analyze
-        content_end = new_content[-256:]
+        content_end = new_content[-256:-5]
         self._last_bytes['hash'] = md5(content_end.encode('utf8')).hexdigest()
         self._last_bytes['len'] = len(content_end)
+
+        if self.logger is not None:
+            self.logger.debug('new part: "%s"' % new_content.replace('\n', '\\n'))
 
         log_lines = new_content.splitlines()
         del new_content, content_end

@@ -1,5 +1,5 @@
 {
- "scanTime": 30,
+  "scanTime": 60,
   "updater": {
     "githubOwner": "esoadamo",
     "githubRepo": "simple-guardian",

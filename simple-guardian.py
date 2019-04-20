@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import logging
 import os
 import sqlite3
 import subprocess
@@ -50,6 +51,7 @@ if __name__ == '__main__':
 # directory with configuration files
 CONFIG_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir, 'data'))
 
+LOGGER_NAME = "SG"  # the name of the logger to use
 PROFILES_DIR = os.path.join(CONFIG_DIR, 'profiles')  # directory with profiles
 CONFIG = {}  # dictionary with loaded config in main()
 ONLINE_DATA = {'loggedIn': False}  # type: Dict[str, any] # data about the online server,
@@ -273,8 +275,9 @@ class ThreadScanner(Thread):
     This thread performs the scanning of the logs, looking for attacks and blocking
     """
     def run(self):
+        logger = logging.getLogger(LOGGER_NAME)
         while AppRunning.is_running():
-            print('scanning for attacks')
+            logger.info('scanning for attacks')
             time_scan_start = time.time()
             commit_db = False
 
@@ -284,7 +287,8 @@ class ThreadScanner(Thread):
 
             for profile, profile_data in profiles_copy.items():
                 if 'parser' not in profile_data:  # link the parser with the profile
-                    profile_data['parser'] = log_manipulator.LogParser(profile_data['logFile'], profile_data['filters'])
+                    profile_data['parser'] = log_manipulator.LogParser(profile_data['logFile'], profile_data['filters']
+                                                                       , logger=logger)
                     PROFILES_LOCK.acquire()
                     if profile in PROFILES:  # propagate the change into upcoming scans
                         PROFILES[profile]['parser'] = profile_data['parser']
@@ -327,7 +331,7 @@ class ThreadScanner(Thread):
                         commit_db = True
             if commit_db:
                 Database.commit()
-            print('scanning for attacks completed, took %.1f seconds' % (time.time() - time_scan_start))
+            logger.info('scanning for attacks completed, took %.1f seconds' % (time.time() - time_scan_start))
             AppRunning.sleep_while_running(CONFIG['scanTime'])
 
 
@@ -337,6 +341,7 @@ class Updater:
     """
     _updater = None  # type: github_updater.GithubUpdater
     _excluded_file_names = ["config.json", "blocker"]
+    _logger = logging.getLogger(LOGGER_NAME)
 
     @staticmethod
     def init():
@@ -370,13 +375,13 @@ class Updater:
         :param restart: if set to True, this program will automatically restart to new version after copying new files
         :return: None
         """
-        print('starting update')
+        Updater._logger.info('starting update')
         this_directory = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir))
         Updater._updater.get_and_extract_newest_release_to_directory(this_directory, Updater._excluded_file_names)
         if restart:
-            print('update finished, restarting')
+            Updater._logger.info('update finished, restarting')
             AppRunning.exit(42)
-        print('update finished')
+        Updater._logger.info('update finished')
 
     @staticmethod
     def update_master(restart=True):  # type: (bool) -> None
@@ -385,13 +390,13 @@ class Updater:
         :param restart: if set to True, this program will automatically restart to new version after copying new files
         :return: None
         """
-        print('starting update to the master branch')
+        Updater._logger.info('starting update to the master branch')
         this_directory = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir))
         Updater._updater.extract_master(this_directory, Updater._excluded_file_names)
         if restart:
-            print('update finished, restarting')
+            Updater._logger.info('update finished, restarting')
             AppRunning.exit(42)
-        print('update finished')
+        Updater._logger.info('update finished')
 
 
 def list_attacks(before=None, max_limit=None):  # type: (int, int) -> List[dict]
@@ -437,7 +442,8 @@ def load_profiles():  # type: () -> None
     Loads profiles from disc
     :return: None
     """
-    print('Loading profiles')
+    logger = logging.getLogger(LOGGER_NAME)
+    logger.info('Loading profiles')
     PROFILES_LOCK.acquire()
     PROFILES.clear()
     if not os.path.exists(PROFILES_DIR):
@@ -451,7 +457,7 @@ def load_profiles():  # type: () -> None
                 try:
                     loaded_profiles = json.load(f)
                 except json.decoder.JSONDecodeError:
-                    print('Invalid profile - not loading (%s)' % file_profile)
+                    logger.info('Invalid profile - not loading (%s)' % file_profile)
                     continue
                 for profile, profile_data in loaded_profiles.items():
                     if profile not in PROFILES:
@@ -488,6 +494,7 @@ def init_online():  # type: () -> None
     :return: None
     """
     socket = HSocket(ONLINE_DATA['server_url'], auto_connect=False)
+    logger = logging.getLogger(LOGGER_NAME)
 
     class ThreadDisconnectOnProgramEnd(Thread):
         """
@@ -496,7 +503,7 @@ def init_online():  # type: () -> None
         def run(self):
             while AppRunning.is_running():
                 AppRunning.sleep_while_running(2)
-            print('disconnecting from server')
+            logger.info('disconnecting from server')
             socket.disconnect()
 
     ThreadDisconnectOnProgramEnd().start()  # run the thread that will close the socket on program's exit
@@ -517,9 +524,9 @@ def init_online():  # type: () -> None
         :return: None
         """
         if not ok:
-            print('login with server seems expired, please fix this')
+            logger.info('login with server seems expired, please fix this')
             return
-        print('login with server ok')
+        logger.info('login with server ok')
 
     def get_attacks(data):  # type: (dict) -> None
         """
@@ -681,12 +688,24 @@ def cli():
 
 
 def main():
+    # Initialize logging
+    logger = logging.getLogger(LOGGER_NAME)
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter(
+        '%(asctime)s %(name)-4s %(levelname)-4s %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.info('starting up')
+
     # Load global configs
     with open(os.path.join(CONFIG_DIR, 'config.json'), 'r') as f:
         CONFIG.update(json.load(f))
+        logger.debug('config.json loaded')
 
     try:
         if sys.argv[1] == 'client':
+            logger.debug('entering client mode')
             cli()
             exit()
     except IndexError:
@@ -694,27 +713,29 @@ def main():
 
     # Load online config
     if os.path.isfile(os.path.join(CONFIG_DIR, 'server.json')):
+        logger.debug('loading online config')
         with open(os.path.join(CONFIG_DIR, 'server.json'), 'r') as f:
             ONLINE_DATA.update(json.load(f))
         if ONLINE_DATA['loggedIn']:
             init_online()
 
     # Load all profiles
-    print('Loading profiles')
+    logger.info('Loading profiles')
     load_profiles()
-    print('Profiles loaded')
+    logger.info('Profiles loaded')
 
     # Initialize database
     Database.init(os.path.join(CONFIG_DIR, 'db.db'))
 
-    print('Blocking all IPs saved in database')
+    logger.info('Blocking all IPs saved in database')
     IPBlocker.block_all_banned()
 
     # Check for updates and perform automatic update if enabled and available
     Updater.init()
     update_available = Updater.update_available()
-    print('You are up to date' if not update_available
-          else 'There is another version on the server: %s (you have %s)' % (Updater.get_latest_name(), VERSION_TAG))
+    logger.info('You are up to date' if not update_available
+                else 'There is another version on the server: %s (you have %s)'
+                     % (Updater.get_latest_name(), VERSION_TAG))
     if update_available and CONFIG.get('updater', {}).get('autoupdate', False):
         Updater.update()
 
