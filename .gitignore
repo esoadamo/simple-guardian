@@ -6,3 +6,5 @@ data/db.db
 *.log
 __pycache__/
 data/server.json
+builds/
+build-and-release.sh
