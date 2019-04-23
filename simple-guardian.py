@@ -10,6 +10,7 @@ from datetime import date
 from queue import Queue
 from subprocess import Popen
 from threading import Thread, Lock
+from threading import enumerate as threading_enumerate
 from typing import List, Dict, Set
 
 import requests
@@ -57,7 +58,7 @@ CONFIG = {}  # dictionary with loaded config in main()
 ONLINE_DATA = {'loggedIn': False}  # type: Dict[str, any] # data about the online server,
 PROFILES = {}  # type: {str: dict}
 PROFILES_LOCK = Lock()  # lock used when manipulating with profiles in async
-VERSION_TAG = "1.11"  # tag of current version
+VERSION_TAG = "1.12"  # tag of current version
 
 
 class Database:
@@ -287,8 +288,8 @@ class ThreadScanner(Thread):
 
             for profile, profile_data in profiles_copy.items():
                 if 'parser' not in profile_data:  # link the parser with the profile
-                    profile_data['parser'] = log_manipulator.LogParser(profile_data['logFile'], profile_data['filters']
-                                                                       , logger=logger)
+                    profile_data['parser'] = log_manipulator.LogParser(profile_data['logFile'], profile_data['filters'],
+                                                                       logger=logger)
                     PROFILES_LOCK.acquire()
                     if profile in PROFILES:  # propagate the change into upcoming scans
                         PROFILES[profile]['parser'] = profile_data['parser']
@@ -748,6 +749,14 @@ def main():
             AppRunning.sleep_while_running(10)
         except KeyboardInterrupt:
             AppRunning.set_running(False)
+
+    while True:
+        print('waiting on all threads to terminate...')
+        if len(threading_enumerate()) == 1:
+            print('ok, bye')
+            break
+        print('%d left' % len(threading_enumerate()), threading_enumerate())
+        time.sleep(1)
 
 
 if __name__ == '__main__':
