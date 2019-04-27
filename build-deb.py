@@ -19,7 +19,10 @@ WANTED_FILES = [
     'log_manipulator.py',
     'simple-guardian.py',
     'data/profiles/default.json',
-    'data/config.json'
+    'data/config.json',
+    'the_runner/__init__.py',
+    'the_runner/requirements_updater.py',
+    'the_runner/the_runner.py'
 ]
 
 BUILD_DIR = path.abspath(BUILD_DIR)
@@ -56,30 +59,32 @@ with open(path.join(BUILD_DIR, 'DEBIAN', 'conffiles'), 'w') as f:
 print('creating post install script')
 with open(path.join(BUILD_DIR, 'DEBIAN', 'postinst'), 'w') as f:
     f.write("""#!/bin/bash
-useradd simpleguardian
-usermod -a -G adm simpleguardian
-chown -R simpleguardian:simpleguardian /usr/share/simple-guardian
-chown root:root /usr/share/simple-guardian/blocker
-chmod +x /usr/share/simple-guardian/blocker
-chmod u+s /usr/share/simple-guardian/blocker
-python3 -m venv /usr/share/simple-guardian/venv
-/usr/share/simple-guardian/venv/bin/pip install --no-cache-dir -r /usr/share/simple-guardian/requirements.txt
-rm /usr/share/simple-guardian/requirements.txt
-chmod +x /usr/bin/simple-guardian-client
-chown root:root /usr/bin/simple-guardian-client
-service simple-guardian restart
-systemctl daemon-reload
+sudo -H -u root useradd simpleguardian
+sudo -H -u root usermod -a -G adm simpleguardian
+sudo -H -u root chown -R simpleguardian:simpleguardian /usr/share/simple-guardian
+sudo -H -u root chown root:root /usr/share/simple-guardian/blocker
+sudo -H -u root chmod +x /usr/share/simple-guardian/blocker
+sudo -H -u root chmod u+s /usr/share/simple-guardian/blocker
+sudo -H -u root python3 -m venv /usr/share/simple-guardian/venv
+sudo -H -u root /usr/share/simple-guardian/venv/bin/pip install --no-cache-dir -r /usr/share/simple-guardian/requirements.txt
+sudo -H -u root rm /usr/share/simple-guardian/requirements.txt
+sudo -H -u root chmod +x /usr/bin/simple-guardian-client
+sudo -H -u root chown root:root /usr/bin/simple-guardian-client
+sudo -H -u root systemctl daemon-reload
+sudo -H -u root service simple-guardian restart
+sudo -H -u root systemctl daemon-reload
 """)
 os.chmod(path.join(BUILD_DIR, 'DEBIAN', 'postinst'), 0o775)
 
 # make prerm script
-print('creating post install script')
+print('creating pre rm script')
 with open(path.join(BUILD_DIR, 'DEBIAN', 'prerm'), 'w') as f:
     f.write("""#!/bin/bash
-rm /usr/bin/simple-guardian-client
-rm -r /usr/share/simple-guardian/venv
-rm /etc/systemd/system/simple-guardian.service
-userdel simpleguardian
+sudo -H -u root rm /usr/bin/simple-guardian-client
+sudo -H -u root rm -r /usr/share/simple-guardian/venv
+sudo -H -u root rm /etc/systemd/system/simple-guardian.service
+sudo -H -u root userdel simpleguardian
+exit 0
 """)
 os.chmod(path.join(BUILD_DIR, 'DEBIAN', 'prerm'), 0o775)
 

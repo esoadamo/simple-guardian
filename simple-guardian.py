@@ -31,7 +31,7 @@ CONFIG = {}  # dictionary with loaded config in main()
 ONLINE_DATA = {'loggedIn': False}  # type: Dict[str, any] # data about the online server,
 PROFILES = {}  # type: {str: dict}
 PROFILES_LOCK = Lock()  # lock used when manipulating with profiles in async
-VERSION_TAG = "1.2_beta"  # tag of current version
+VERSION_TAG = "1.21"  # tag of current version
 
 
 class Database:
@@ -745,6 +745,7 @@ def main():
         time.sleep(1)
 
     exit(AppRunning.exit_code[0])
+
 
 if __name__ == '__main__':
     main()

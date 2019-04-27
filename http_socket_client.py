@@ -1,7 +1,8 @@
 import json
-import requests
 import time
 from threading import Thread
+
+import requests
 
 
 class HSocket:
@@ -24,6 +25,7 @@ class HSocket:
         self.__connectedFired = False  # when listener for connected is not defined yet, it will be fired right after
         # definition if this is still False
         self._connecting = False  # indicates if we are at least connecting to the server
+        self._reconnecting = False  # the meantime between disconnection and automatic reconnection
         self.sid = None  # local socket's id from server
 
         self._last_message_time = time.time()  # time of last message we got from the server
@@ -42,6 +44,7 @@ class HSocket:
             return
 
         self._connecting = True
+        self._reconnecting = False
 
         class HSocketRecevierThread(Thread):
             """
@@ -99,13 +102,22 @@ class HSocket:
             self.connected = False
             self._run_listener('disconnect')
 
-        if reconnect:
+        if reconnect and not self._reconnecting:
             # if enabled, run the reconnection countdown in background
+            self._reconnecting = True
+
             def f_reconnect():
-                time.sleep(30)
+                for _ in range(30):
+                    if not self._reconnecting:
+                        break
+                    time.sleep(1)
                 self.connect()
 
             AsyncExecuter(f_reconnect).start()
+
+        if not reconnect and self._reconnecting:
+            # do not reconnect, disconnect us for good
+            self._reconnecting = False
 
     def on(self, event_name, func):  # type: (str, "function") -> None
         """
