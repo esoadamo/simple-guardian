@@ -25,6 +25,9 @@ class RequirementsUpdater:
         Checks if requirements file has not changed
         :return: True hash of the current requirements file is same as the saved hash
         """
+        if not path.exists(self.requirements_file):
+            return True
+
         if not path.exists(self.hashes_file):
             return False
 

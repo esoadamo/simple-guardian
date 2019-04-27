@@ -19,7 +19,10 @@ WANTED_FILES = [
     'log_manipulator.py',
     'simple-guardian.py',
     'data/profiles/default.json',
-    'data/config.json'
+    'data/config.json',
+    'the_runner/__init__.py',
+    'the_runner/requirements_updater.py',
+    'the_runner/the_runner.py'
 ]
 
 BUILD_DIR = path.abspath(BUILD_DIR)
@@ -67,6 +70,7 @@ python3 -m venv /usr/share/simple-guardian/venv
 rm /usr/share/simple-guardian/requirements.txt
 chmod +x /usr/bin/simple-guardian-client
 chown root:root /usr/bin/simple-guardian-client
+systemctl daemon-reload
 service simple-guardian restart
 systemctl daemon-reload
 """)
