@@ -8,7 +8,6 @@ import sys
 import time
 from datetime import date
 from queue import Queue
-from subprocess import Popen
 from threading import Thread, Lock
 from threading import enumerate as threading_enumerate
 from typing import List, Dict, Set
@@ -18,36 +17,10 @@ import requests
 import github_updater
 import log_manipulator
 from http_socket_client import HSocket
+from the_runner.requirements_updater import RequirementsUpdater
+from the_runner.the_runner import enable_restart_on_runtime, RESTART_EXIT_CODE, runtime_restart
 
-# the Runner - this is what enables us to restart server during runtime
-if __name__ == '__main__':
-    """
-    If not slave, run this script again as a slave
-    When slave script ends, check if his return code is 42.
-    If so, restart the script again, otherwise exit program with given exitcode
-
-    Must be on start to keep memory usage as low as possible
-    """
-    if sys.argv[-1] != 'SLAVE':
-        process = None
-        try:
-            while True:
-                stderr = None
-                process = Popen([sys.executable] + sys.argv + ['SLAVE'])
-                process.communicate()
-                process.wait()
-                r = process.returncode
-                if r == 42:
-                    continue
-                break
-            exit(r)
-        except KeyboardInterrupt:
-            if process is not None:
-                process.kill()
-            print('^C received, shutting down master process')
-            exit(0)
-    del sys.argv[-1]
-# End of the Runner
+enable_restart_on_runtime()
 
 # directory with configuration files
 CONFIG_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir, 'data'))
@@ -58,7 +31,7 @@ CONFIG = {}  # dictionary with loaded config in main()
 ONLINE_DATA = {'loggedIn': False}  # type: Dict[str, any] # data about the online server,
 PROFILES = {}  # type: {str: dict}
 PROFILES_LOCK = Lock()  # lock used when manipulating with profiles in async
-VERSION_TAG = "1.12"  # tag of current version
+VERSION_TAG = "1.2_beta"  # tag of current version
 
 
 class Database:
@@ -160,6 +133,7 @@ class AppRunning:
     This class signalizes or sets if this program's threads should run or should be terminated
     """
     app_running = [True]
+    exit_code = [0]
 
     @staticmethod
     def is_running():  # type: () -> bool
@@ -189,6 +163,7 @@ class AppRunning:
         :return: NOne
         """
         AppRunning.set_running(False)
+        AppRunning.exit_code[0] = exit_code
         exit(exit_code)
 
     @staticmethod
@@ -381,7 +356,7 @@ class Updater:
         Updater._updater.get_and_extract_newest_release_to_directory(this_directory, Updater._excluded_file_names)
         if restart:
             Updater._logger.info('update finished, restarting')
-            AppRunning.exit(42)
+            AppRunning.exit(RESTART_EXIT_CODE)
         Updater._logger.info('update finished')
 
     @staticmethod
@@ -396,7 +371,7 @@ class Updater:
         Updater._updater.extract_master(this_directory, Updater._excluded_file_names)
         if restart:
             Updater._logger.info('update finished, restarting')
-            AppRunning.exit(42)
+            AppRunning.exit(RESTART_EXIT_CODE)
         Updater._logger.info('update finished')
 
 
@@ -657,6 +632,7 @@ def cli():
     # commands below require root privileges
     if os.geteuid() != 0:
         print('this option must be executed as root')
+        print('for help enter simple-guardian-client help')
         exit(1)
 
     if 'login' in sys.argv:
@@ -712,6 +688,16 @@ def main():
     except IndexError:
         pass
 
+    # Check if requirements have changed and if so, update
+    req_updater = RequirementsUpdater()
+    if not req_updater.check():
+        logger.info('requirements have change since last time, updating')
+        if not req_updater.update():
+            logger.error('requirements update FAILED!')
+        else:
+            logger.info('restarting in order to apply new updates')
+            runtime_restart()
+
     # Load online config
     if os.path.isfile(os.path.join(CONFIG_DIR, 'server.json')):
         logger.debug('loading online config')
@@ -758,6 +744,7 @@ def main():
         print('%d left' % len(threading_enumerate()), threading_enumerate())
         time.sleep(1)
 
+    exit(AppRunning.exit_code[0])
 
 if __name__ == '__main__':
     main()

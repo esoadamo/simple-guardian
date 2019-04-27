@@ -8,3 +8,4 @@ __pycache__/
 data/server.json
 builds/
 build-and-release.sh
+.requirements.md5
