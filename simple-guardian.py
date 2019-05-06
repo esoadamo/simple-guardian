@@ -27,11 +27,24 @@ CONFIG_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.par
 
 LOGGER_NAME = "SG"  # the name of the logger to use
 PROFILES_DIR = os.path.join(CONFIG_DIR, 'profiles')  # directory with profiles
-CONFIG = {}  # dictionary with loaded config in main()
-ONLINE_DATA = {'loggedIn': False}  # type: Dict[str, any] # data about the online server,
+CONFIG = {
+    "scanTime": 60,
+    "updater": {
+        "githubOwner": "esoadamo",
+        "githubRepo": "simple-guardian",
+        "autoupdate": False
+    },
+    "defaults": {
+        "scanRange": 600,
+        "maxAttempts": 5
+    }
+}  # dictionary with loaded config in main()
+ONLINE_DATA = {'loggedIn': False,
+               'lastAttackIDSent': 0
+               }  # type: Dict[str, any] # data about the online server,
 PROFILES = {}  # type: {str: dict}
 PROFILES_LOCK = Lock()  # lock used when manipulating with profiles in async
-VERSION_TAG = "1.21"  # tag of current version
+VERSION_TAG = "1.3"  # tag of current version
 
 
 class Database:
@@ -49,11 +62,13 @@ class Database:
         :param file_path: path to the saved file with database
         :return: None
         """
+
         class ThreadDatabase(Thread):
             """
             This thread runs in background and performs all operations with the database if needed
             Creates new database if not exists yet
             """
+
             def run(self):
                 connection = sqlite3.connect(file_path)
 
@@ -222,6 +237,9 @@ class IPBlocker:
         """
         if use_db and cls.ip_is_blocked(ip):
             return False
+        if ip.strip() in ['127.0.0.1', 'localhost', '::1']:
+            logging.getLogger(LOGGER_NAME).warning('blocking "%s" is not allowed' % ip)
+            return False
         subprocess.run([cls.block_command_path, 'block', ip])
         if use_db:
             Database.execute('INSERT INTO `bans`(`time`,`ip`) VALUES (?,?);', (time.time(), ip))
@@ -250,6 +268,7 @@ class ThreadScanner(Thread):
     """
     This thread performs the scanning of the logs, looking for attacks and blocking
     """
+
     def run(self):
         logger = logging.getLogger(LOGGER_NAME)
         while AppRunning.is_running():
@@ -476,6 +495,7 @@ def init_online():  # type: () -> None
         """
         This thread forces disconnection of the socket when the client is supposed to end
         """
+
         def run(self):
             while AppRunning.is_running():
                 AppRunning.sleep_while_running(2)
@@ -503,6 +523,7 @@ def init_online():  # type: () -> None
             logger.info('login with server seems expired, please fix this')
             return
         logger.info('login with server ok')
+        get_update_information('')  # send info about current version to the server
 
     def get_attacks(data):  # type: (dict) -> None
         """
@@ -542,7 +563,7 @@ def init_online():  # type: () -> None
 
         socket.emit('statistic_data', json.dumps(
             {'userSid': sid, 'data': {
-             'bans': {'total': bans_total, 'today': bans_today},
+                'bans': {'total': bans_total, 'today': bans_today},
                 'attacks': {'total': attacks_total, 'today': attacks_today}}}
         ))
 
@@ -698,14 +719,6 @@ def main():
             logger.info('restarting in order to apply new updates')
             runtime_restart()
 
-    # Load online config
-    if os.path.isfile(os.path.join(CONFIG_DIR, 'server.json')):
-        logger.debug('loading online config')
-        with open(os.path.join(CONFIG_DIR, 'server.json'), 'r') as f:
-            ONLINE_DATA.update(json.load(f))
-        if ONLINE_DATA['loggedIn']:
-            init_online()
-
     # Load all profiles
     logger.info('Loading profiles')
     load_profiles()
@@ -725,6 +738,14 @@ def main():
                      % (Updater.get_latest_name(), VERSION_TAG))
     if update_available and CONFIG.get('updater', {}).get('autoupdate', False):
         Updater.update()
+
+    # Load online config
+    if os.path.isfile(os.path.join(CONFIG_DIR, 'server.json')):
+        logger.debug('loading online config')
+        with open(os.path.join(CONFIG_DIR, 'server.json'), 'r') as f:
+            ONLINE_DATA.update(json.load(f))
+        if ONLINE_DATA['loggedIn']:
+            init_online()
 
     # Start scanning of the logs
     ThreadScanner().start()
