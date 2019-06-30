@@ -36,7 +36,11 @@ CONFIG = {
     },
     "defaults": {
         "scanRange": 600,
-        "maxAttempts": 5
+        "maxAttempts": 5,
+        "skipIPs": [
+            '127.0.0.1',
+            '::1'
+        ]
     }
 }  # dictionary with loaded config in main()
 ONLINE_DATA = {'loggedIn': False,
@@ -44,7 +48,7 @@ ONLINE_DATA = {'loggedIn': False,
                }  # type: Dict[str, any] # data about the online server,
 PROFILES = {}  # type: {str: dict}
 PROFILES_LOCK = Lock()  # lock used when manipulating with profiles in async
-VERSION_TAG = "1.3"  # tag of current version
+VERSION_TAG = "1.22"  # tag of current version
 
 
 class Database:
@@ -200,6 +204,14 @@ class IPBlocker:
     """
     block_command_path = './blocker'  # path to the executable that blocks the IPs
 
+    @classmethod
+    def init(cls):  # type: () -> None
+        """
+        Initializes blocker for blocking IPs
+        :return: None
+        """
+        subprocess.run([cls.block_command_path, 'init'])
+
     @staticmethod
     def list_blocked_ips():  # type: () -> Set[str]
         """
@@ -237,7 +249,7 @@ class IPBlocker:
         """
         if use_db and cls.ip_is_blocked(ip):
             return False
-        if ip.strip() in ['127.0.0.1', 'localhost', '::1']:
+        if ip.strip() in CONFIG["defaults"]["skipIPs"]:
             logging.getLogger(LOGGER_NAME).warning('blocking "%s" is not allowed' % ip)
             return False
         subprocess.run([cls.block_command_path, 'block', ip])
@@ -624,6 +636,29 @@ def init_online():  # type: () -> None
     socket.connect()
 
 
+def load_config(dict_src=None, dict_target=None):  # type: (dict, dict) -> None
+    """
+    Recursively load config from the file, merging all values with the default ones
+    :param dict_src: defaults to config.json
+    :param dict_target:  defaults to CONFIG
+    :return: None
+    """
+    if dict_src is None:
+        with open('config.json', 'r') as f:
+            dict_src = json.load(f)
+        dict_target = CONFIG
+    for k, v in dict_src.items():
+        if k in dict_target:
+            if type(dict_target[k]) == list:
+                # noinspection PyTypeChecker
+                dict_target[k] = list(set(dict_target[k] + v))
+                continue
+            if type(dict_target[k]) == dict:
+                load_config(v, dict_target[k])
+                continue
+        dict_target[k] = v
+
+
 def cli():
     """
     Run CLI
@@ -697,9 +732,8 @@ def main():
     logger.info('starting up')
 
     # Load global configs
-    with open(os.path.join(CONFIG_DIR, 'config.json'), 'r') as f:
-        CONFIG.update(json.load(f))
-        logger.debug('config.json loaded')
+    load_config()
+    logger.debug('config.json loaded')
 
     try:
         if sys.argv[1] == 'client':
@@ -728,6 +762,7 @@ def main():
     Database.init(os.path.join(CONFIG_DIR, 'db.db'))
 
     logger.info('Blocking all IPs saved in database')
+    IPBlocker.init()
     IPBlocker.block_all_banned()
 
     # Check for updates and perform automatic update if enabled and available
