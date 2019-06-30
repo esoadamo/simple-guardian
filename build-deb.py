@@ -152,7 +152,7 @@ Architecture: all
 Essential: no
 Section: security
 Priority: optional
-Depends: python3, systemd, python3-pip, python3-venv
+Depends: python3, systemd, python3-pip, python3-venv, iptables, ipset
 Maintainer: Adam Hlaváček
 Installed-Size: %d
 Description: Protection against brute force attacks

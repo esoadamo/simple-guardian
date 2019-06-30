@@ -8,7 +8,7 @@
 #define iptables /sbin/iptables
 #define ipset /sbin/ipset
 #define username "simpleguardian"
-#define indexCommand 1  
+#define indexCommand 1
 #define indexIp 2
 
 /**
@@ -65,7 +65,7 @@ int is_already_blocked(char **argv) {
     Returns 0 if not blocked, 1 if already blocked
     */
     char command_check_if_blocked[] = "ipset test simpleguardian %s > /dev/null 2>&1";
-    char *command_check_if_blocked_formatted = (char*)malloc(sizeof(command_check_if_blocked) + sizeof(argv[indexIp]));
+    char *command_check_if_blocked_formatted = (char*)malloc(50 + sizeof(command_check_if_blocked) + sizeof(argv[indexIp]));
     sprintf(command_check_if_blocked_formatted, command_check_if_blocked, argv[indexIp]);
     return system(command_check_if_blocked_formatted) == 0;
 }
@@ -107,7 +107,7 @@ int main(int argc, char **argv){
 
         printf("blocking %s\n", argv[indexIp]);
         char command[] = "ipset add simpleguardian %s > /dev/null 2>&1";
-        char *command_formatted = (char*)malloc(sizeof(command) + sizeof(argv[indexIp]));
+        char *command_formatted = (char*)malloc(50 + sizeof(command) + sizeof(argv[indexIp]));
         sprintf(command_formatted, command, argv[indexIp]);
 
         system(command_formatted);
@@ -122,7 +122,7 @@ int main(int argc, char **argv){
         printf("unblocking %s\n", argv[indexIp]);
 
         char command[] = "ipset del simpleguardian %s > /dev/null 2>&1";
-        char *command_formatted = (char*)malloc(sizeof(command) + sizeof(argv[indexIp]));
+        char *command_formatted = (char*)malloc(50 + sizeof(command) + sizeof(argv[indexIp]));
         sprintf(command_formatted, command, argv[indexIp]);
 
         system(command_formatted);

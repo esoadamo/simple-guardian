@@ -648,7 +648,7 @@ def load_config(dict_src=None, dict_target=None):  # type: (dict, dict) -> None
     :return: None
     """
     if dict_src is None:
-        with open('config.json', 'r') as f:
+        with open('data/config.json', 'r') as f:
             dict_src = json.load(f)
         dict_target = CONFIG
     for k, v in dict_src.items():
