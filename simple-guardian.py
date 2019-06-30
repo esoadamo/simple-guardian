@@ -205,12 +205,12 @@ class IPBlocker:
     block_command_path = './blocker'  # path to the executable that blocks the IPs
 
     @classmethod
-    def init(cls):  # type: () -> None
+    def init(cls):  # type: () -> bool
         """
         Initializes blocker for blocking IPs
-        :return: None
+        :return: True if init was successful, else otherwise
         """
-        subprocess.run([cls.block_command_path, 'init'])
+        return subprocess.run([cls.block_command_path, 'init']).returncode == 0
 
     @staticmethod
     def list_blocked_ips():  # type: () -> Set[str]
@@ -252,7 +252,9 @@ class IPBlocker:
         if ip.strip() in CONFIG["defaults"]["skipIPs"]:
             logging.getLogger(LOGGER_NAME).warning('blocking "%s" is not allowed' % ip)
             return False
-        subprocess.run([cls.block_command_path, 'block', ip])
+        if subprocess.run([cls.block_command_path, 'block', ip]).returncode != 0:
+            logging.getLogger(LOGGER_NAME).error('blocking "%s" failed' % ip)
+            return False
         if use_db:
             Database.execute('INSERT INTO `bans`(`time`,`ip`) VALUES (?,?);', (time.time(), ip))
             if commit_db:
@@ -269,7 +271,9 @@ class IPBlocker:
         """
         if not cls.ip_is_blocked(ip):
             return False
-        subprocess.run([cls.block_command_path, 'unblock', ip])
+        if subprocess.run([cls.block_command_path, 'unblock', ip]).returncode != 0:
+            logging.getLogger().error('unblocking "%s" failed' % ip)
+            return False
         Database.execute('DELETE FROM bans WHERE ip = ?', (ip,))
         if commit_db:
             Database.commit()
