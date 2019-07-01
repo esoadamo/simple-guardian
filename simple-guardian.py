@@ -1,26 +1,29 @@
 #!/usr/bin/env python3
-import json
-import logging
-import os
-import sqlite3
-import subprocess
-import sys
-import time
-from datetime import date
-from queue import Queue
-from threading import Thread, Lock
-from threading import enumerate as threading_enumerate
-from typing import List, Dict, Set
+try:
+    import json
+    import logging
+    import os
+    import sqlite3
+    import subprocess
+    import sys
+    import time
+    from datetime import date
+    from queue import Queue
+    from threading import Thread, Lock
+    from threading import enumerate as threading_enumerate
+    from typing import List, Dict, Set
 
-import requests
+    import requests
 
-import github_updater
-import log_manipulator
-from http_socket_client import HSocket
-from the_runner.requirements_updater import RequirementsUpdater
-from the_runner.the_runner import enable_restart_on_runtime, RESTART_EXIT_CODE, runtime_restart
+    import github_updater
+    import log_manipulator
+    from http_socket_client import HSocket
+    from the_runner.the_runner import RESTART_EXIT_CODE, runtime_restart, enable_restart_on_runtime
+finally:
+    from the_runner.requirements_updater import RequirementsUpdater
 
-enable_restart_on_runtime()
+    RequirementsUpdater().auto()
+    enable_restart_on_runtime()
 
 # directory with configuration files
 CONFIG_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), os.path.pardir, 'data'))

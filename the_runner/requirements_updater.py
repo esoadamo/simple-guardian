@@ -4,6 +4,8 @@ from os import path
 from subprocess import call
 from sys import executable
 
+from .the_runner import enable_restart_on_runtime, runtime_restart
+
 
 class RequirementsUpdater:
     """
@@ -68,3 +70,14 @@ class RequirementsUpdater:
         print('requirements update complete')
         self.save_hash()
         return True
+
+    def auto(self):  # type: () -> None
+        """
+        Automatically checks if update of requirements is available and if so, performs it and restarts the program
+        :return: None
+        """
+        if self.check():
+            return
+        enable_restart_on_runtime()
+        self.update()
+        runtime_restart()
