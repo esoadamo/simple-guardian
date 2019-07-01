@@ -44,6 +44,7 @@ CONFIG = {
             '127.0.0.1',
             '::1'
         ],
+        "unblockMinutes": None  # setting to None makes the IP to never be unblocked, number is in minutes
     }
 }  # dictionary with loaded config in main()
 ONLINE_DATA = {'loggedIn': False,
@@ -51,7 +52,7 @@ ONLINE_DATA = {'loggedIn': False,
                }  # type: Dict[str, any] # data about the online server,
 PROFILES = {}  # type: {str: dict}
 PROFILES_LOCK = Lock()  # lock used when manipulating with profiles in async
-VERSION_TAG = "1.22"  # tag of current version
+VERSION_TAG = "2.0"  # tag of current version
 
 
 class Database:
@@ -312,9 +313,17 @@ class ThreadScanner(Thread):
     def run(self):
         logger = logging.getLogger(LOGGER_NAME)
         while AppRunning.is_running():
-            logger.info('scanning for attacks')
             time_scan_start = time.time()
             commit_db = False
+            
+            logger.info('scanning for attacks')
+            if CONFIG["defaults"]["unblockMinutes"] is not None:
+                unblock_time = int(time.time() - (CONFIG["defaults"]["unblockMinutes"] * 60))
+                for record in Database.execute('SELECT ip FROM bans WHERE time < ?', (unblock_time,)):
+                    ip = record[0]
+                    logger.info('removing %s from jail' % ip)
+                    IPBlocker.unblock(ip)
+                    commit_db = True
 
             PROFILES_LOCK.acquire()
             profiles_copy = dict(PROFILES)
