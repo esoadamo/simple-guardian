@@ -40,7 +40,7 @@ CONFIG = {
         "skipIPs": [
             '127.0.0.1',
             '::1'
-        ]
+        ],
     }
 }  # dictionary with loaded config in main()
 ONLINE_DATA = {'loggedIn': False,
@@ -262,22 +262,43 @@ class IPBlocker:
         return True
 
     @classmethod
-    def unblock(cls, ip, commit_db=True):  # type: (str, bool) -> bool
+    def unblock(cls, ip, commit_db=True, use_db=True):  # type: (str, bool, bool) -> bool
         """
         Unblocks already blocked IP
         :param ip: blocked IP to unblock
         :param commit_db: if set to True, the database will be saved to disc after query
+        :param use_db:  if set to True, the IP will be marked as unblocked in database
         :return: True if unblock was successful, False if the IP is not blocked
         """
-        if not cls.ip_is_blocked(ip):
+        if use_db and not cls.ip_is_blocked(ip):
             return False
         if subprocess.run([cls.block_command_path, 'unblock', ip]).returncode != 0:
             logging.getLogger().error('unblocking "%s" failed' % ip)
             return False
-        Database.execute('DELETE FROM bans WHERE ip = ?', (ip,))
-        if commit_db:
-            Database.commit()
+        if use_db:
+            Database.execute('DELETE FROM bans WHERE ip = ?', (ip,))
+            if commit_db:
+                Database.commit()
         return True
+
+
+class FederationBlocklist:
+    """
+    When federation of blocked IPs is enabled, this class (un)blocks IPs marked as (un)blocked by the server
+    """
+    blocked_ips = set()
+
+    @classmethod
+    def new_blocklist(cls, ips):  # type: (Set[str]) -> None
+        """
+        Applies new blocklist, blocking all IPs inside it and unblocking all previously blocked IPs from
+        previous blocklist
+        :param ips: set of IP addresses
+        :return: None
+        """
+        [IPBlocker.unblock(ip, False, False) for ip in cls.blocked_ips.difference(ips)]
+        [IPBlocker.block(ip, False, False) for ip in ips.difference(cls.blocked_ips)]
+        cls.blocked_ips = ips
 
 
 class ThreadScanner(Thread):
@@ -633,6 +654,14 @@ def init_online():  # type: () -> None
         socket.emit('update_info', json.dumps({'userSid': user_sid, 'versionCurrent': VERSION_TAG,
                                                'versionLatest': Updater.get_latest_name()}))
 
+    def apply_new_blocklist(ips):  # type: (List[str]) -> None
+        """
+        Blocks all IPs on this list provided by server
+        :param ips: list of IP addresses to block
+        :return: None
+        """
+        FederationBlocklist.new_blocklist(set(ips))
+
     # initialize all handlers and then connect
     socket.on('connect', connect)
     socket.on('login', login)
@@ -644,6 +673,7 @@ def init_online():  # type: () -> None
     socket.on('update_master', update_master)
     socket.on('get_update_information', get_update_information)
     socket.on('unblock_ip', unblock_ip)
+    socket.on('blocklist', apply_new_blocklist)
     socket.connect()
 
 
