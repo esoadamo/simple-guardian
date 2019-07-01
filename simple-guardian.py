@@ -316,6 +316,10 @@ class ThreadScanner(Thread):
 
                 for ip, ip_attacks in attacks.items():  # IP and list of IP's attacks
                     for i, attack_data in enumerate(ip_attacks):
+                        if ip == 'NO VALID IP FOUND':
+                            logger.warning('No valid IP could be found inside "%s"' % attack_data['IP-RAW'])
+                            continue
+
                         # TIMESTAMP must be unique
                         while attack_data['TIMESTAMP'] in known_attack_timestamps:
                             attack_data['TIMESTAMP'] += 1
@@ -337,6 +341,9 @@ class ThreadScanner(Thread):
                                                                           profile_data['scanRange'],
                                                                           attacks=attacks)
                 for offender_ip in offenders.keys():  # block their IPs
+                    if offender_ip == 'NO VALID IP FOUND':
+                        logger.warning('Cannot block IP because the IP is invalid')
+                        continue
                     if IPBlocker.block(offender_ip, commit_db=False):
                         # do not commit the DB now, commit only after everyone is blocked
                         commit_db = True

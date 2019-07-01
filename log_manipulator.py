@@ -222,6 +222,14 @@ class Rule:
         for i, variable in enumerate(self.__rule_variables):
             data[variable] = variable_search.group(i + 1).strip()
 
+        # attempt to parse raw IP
+        if 'IP' in data:
+            ip = re.findall('[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}', data['IP'])
+            if len(ip) == 0:
+                ip = re.findall('([0-9a-f]{1,4}|::)((:{0,2}[0-9a-f]{0,4}){0,7})', data['IP'])
+            if len(ip) == 0:
+                data['IP-RAW'], data['IP'] = data['IP'], 'NO VALID IP FOUND'
+
         if self.__service_name is not None:
             data['SERVICE'] = self.__service_name
 
