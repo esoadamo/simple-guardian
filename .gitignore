@@ -1,5 +1,6 @@
 .idea/
 venv*
+wenv
 data/profiles/*
 !data/profiles/default.json
 data/db.db

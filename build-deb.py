@@ -18,7 +18,7 @@ WANTED_FILES = [
     'http_socket_client.py',
     'log_manipulator.py',
     'simple-guardian.py',
-    'data/profiles/default.json',
+    'data/profiles/.gitkeep',
     'data/config.json',
     'the_runner/__init__.py',
     'the_runner/requirements_updater.py',

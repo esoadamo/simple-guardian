@@ -18,9 +18,9 @@ try:
     import github_updater
     import log_manipulator
     from http_socket_client import HSocket
-    from the_runner.the_runner import RESTART_EXIT_CODE, runtime_restart, enable_restart_on_runtime
+    from the_runner.the_runner import RESTART_EXIT_CODE, runtime_restart
 finally:
-    from the_runner.requirements_updater import RequirementsUpdater
+    from the_runner.requirements_updater import RequirementsUpdater, enable_restart_on_runtime
 
     RequirementsUpdater().auto()
     enable_restart_on_runtime()
@@ -672,6 +672,7 @@ def init_online():  # type: () -> None
         :param ips: list of IP addresses to block
         :return: None
         """
+        logger.debug('applying new blocklist from server')
         FederationBlocklist.new_blocklist(set(ips))
 
     # initialize all handlers and then connect
