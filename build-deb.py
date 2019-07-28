@@ -73,6 +73,7 @@ sudo -H -u root chown root:root /usr/bin/simple-guardian-client
 sudo -H -u root systemctl daemon-reload
 sudo -H -u root service simple-guardian restart
 sudo -H -u root systemctl daemon-reload
+sudo -H -u root systemctl enable simple-guardian
 """)
 os.chmod(path.join(BUILD_DIR, 'DEBIAN', 'postinst'), 0o775)
 
