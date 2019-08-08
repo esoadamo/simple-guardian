@@ -21,8 +21,12 @@ try:
     from the_runner.the_runner import RESTART_EXIT_CODE, runtime_restart
 finally:
     from the_runner.requirements_updater import RequirementsUpdater, enable_restart_on_runtime
+    import os.path
 
-    RequirementsUpdater().auto()
+    curr_dir = os.path.dirname(os.path.realpath(__file__))
+    RequirementsUpdater(requirements_file=os.path.join(curr_dir, 'requirements.txt'),
+                        hashes_file=os.path.join(curr_dir, '.requirements.md5')).auto()
+    del curr_dir
     enable_restart_on_runtime()
 
 # directory with configuration files

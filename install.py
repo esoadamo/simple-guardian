@@ -39,11 +39,12 @@ if os.geteuid() != 0:
 try:
     check_call([sys.executable, '-m', 'pip', '-V'])
     check_call([sys.executable, '-m', 'venv', '-h'])
-except CalledProcessError:
+    check_call(['ipset', '-v'])
+except (CalledProcessError, FileNotFoundError):
     print('it seems that pip/venv is/are missing. I will try to compensate that')
     try:
-        check_call(['apt', 'install', '-y', 'python3-pip', 'python3-venv'])
-    except CalledProcessError:
+        check_call(['apt', 'install', '-y', 'python3-pip', 'python3-venv', 'ipset'])
+    except (CalledProcessError, FileNotFoundError):
         print("that didn't make it better, this one is on you")
         print("try to install python3-pip python3-venv on Ubuntu/Debian based systems")
         print("ERROR: CHECKING REQUIREMENTS FAILED")
@@ -68,7 +69,7 @@ process_dir(sg_dir)
 for file_from, file_to in files_from_to.items():
     parent_dir = os.path.abspath(os.path.join(file_to, os.path.pardir))
     if not os.path.isdir(parent_dir):
-        os.makedirs(parent_dir)
+        os.makedirs(parent_dir, exist_ok=True)
         pass
     shutil.copy(file_from, file_to)
 
@@ -76,6 +77,10 @@ print('creating %s user' % username)
 if run(["useradd", username], [9]) != 9:  # 9 means user already exists
     print('adding %s to adm group' % username)
     run(["usermod", '-a', '-G', 'adm', username])
+    print('changing {0}\'s home'.format(username))
+    home_dir = os.path.join(target_directory, '.home')
+    os.makedirs(home_dir, exist_ok=True)
+    run(["usermod", '-d', home_dir, username])
 
 print('giving folder permissions to %s' % username)
 run(["chown", "-R", '{0}:root'.format(username), target_directory])
