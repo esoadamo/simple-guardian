@@ -493,6 +493,20 @@ def load_profiles():  # type: () -> None
     Loads profiles from disc
     :return: None
     """
+
+    def load_profile_file(filename):
+        filename = os.path.join(PROFILES_DIR, filename)
+        with open(filename, 'r') as f:
+            try:
+                loaded_profiles = json.load(f)
+            except json.decoder.JSONDecodeError:
+                logger.info('Invalid profile - not loading (%s)' % filename)
+                return
+            for profile, profile_data in loaded_profiles.items():
+                if profile not in PROFILES:
+                    PROFILES[profile] = dict(CONFIG['defaults'])
+                PROFILES[profile].update(profile_data)
+
     logger = logging.getLogger(LOGGER_NAME)
     logger.info('Loading profiles')
     PROFILES_LOCK.acquire()
@@ -500,20 +514,18 @@ def load_profiles():  # type: () -> None
     if not os.path.exists(PROFILES_DIR):
         os.makedirs(PROFILES_DIR)
     else:
+        load_online = False
         for file_profile in os.listdir(PROFILES_DIR):
+            if file_profile == 'online.json':
+                load_online = True
+                continue
             if not file_profile.endswith('.json'):
                 continue
-            file_profile = os.path.join(PROFILES_DIR, file_profile)
-            with open(file_profile, 'r') as f:
-                try:
-                    loaded_profiles = json.load(f)
-                except json.decoder.JSONDecodeError:
-                    logger.info('Invalid profile - not loading (%s)' % file_profile)
-                    continue
-                for profile, profile_data in loaded_profiles.items():
-                    if profile not in PROFILES:
-                        PROFILES[profile] = dict(CONFIG['defaults'])
-                    PROFILES[profile].update(profile_data)
+            load_profile_file(file_profile)
+
+        # Override all duplicate local profiles with online ones
+        if load_online:
+            load_profile_file('online.json')
     PROFILES_LOCK.release()
 
 
