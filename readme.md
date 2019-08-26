@@ -10,7 +10,9 @@ SG loads informations from enabled applications profiles and then checks their l
 
 You can also use the mighty and powerful [web interface](https://github.com/esoadamo/simple-guardian-server), which add remote control functionality, as well as managing multiple servers from one page and also provides the hub with many applications profiles shared by users, which can be sent to your server in just two clicks.
 
-## Instalation for Debian-based systems
+## Instalation
+
+### on Debian-based systems
 
 If you are running a Debian-based OS (like Debian or Ubuntu), you can use SG's
  official repository and get also automatic updates.
@@ -26,6 +28,18 @@ echo "deb https://deb.adamhlavacek.com ./" | sudo tee -a /etc/apt/sources.list
 sudo apt update
 # install
 sudo apt install simple-guardian 
+```
+
+### on generic Linux
+
+```bash
+# clone the repository
+git clone https://github.com/esoadamo/simple-guardian
+cd simple-guardian
+
+# execute the installer
+chmod +x install.py
+sudo ./install.py
 ```
 
 ## Configuration
