@@ -1,6 +1,6 @@
 certifi==2020.12.5
 chardet==4.0.0
 idna==3.1
-pipupgrade==1.8.2
+pipupgrade==1.8.3
 requests==2.25.1
-urllib3==1.26.2
+urllib3==1.26.3
