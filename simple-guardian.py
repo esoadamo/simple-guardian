@@ -316,6 +316,7 @@ class ThreadScanner(Thread):
 
     def run(self):
         logger = logging.getLogger(LOGGER_NAME)
+        first_load = True
         while AppRunning.is_running():
             time_scan_start = time.time()
             commit_db = False
@@ -343,7 +344,8 @@ class ThreadScanner(Thread):
                     PROFILES_LOCK.release()
 
                 try:
-                    attacks = profile_data['parser'].parse_attacks(max_age=profile_data['scanRange'] * 2)
+                    attacks = profile_data['parser'].parse_attacks(max_age=profile_data['scanRange'] * 2,
+                                                                   skip_scanning=first_load)
                 except FileNotFoundError:
                     continue
 
@@ -376,7 +378,8 @@ class ThreadScanner(Thread):
                 # get the offenders who shall be blocked
                 offenders = profile_data['parser'].get_habitual_offenders(profile_data['maxAttempts'],
                                                                           profile_data['scanRange'],
-                                                                          attacks=attacks)
+                                                                          attacks=attacks,
+                                                                          first_load=first_load)
                 for offender_ip in offenders.keys():  # block their IPs
                     if offender_ip == 'NO VALID IP FOUND':
                         logger.warning('Cannot block IP because the IP is invalid')
@@ -387,6 +390,7 @@ class ThreadScanner(Thread):
             if commit_db:
                 Database.commit()
             logger.info('scanning for attacks completed, took %.1f seconds' % (time.time() - time_scan_start))
+            first_load = False
             AppRunning.sleep_while_running(CONFIG['scanTime'])
 
 

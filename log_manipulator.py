@@ -39,10 +39,11 @@ class LogParser:
 
         self.force_rescan()
 
-    def parse_attacks(self, max_age=None):  # type: (float) -> dict
+    def parse_attacks(self, max_age=None, skip_scanning=False):  # type: (float, bool) -> dict
         """
         Parses the attacks from log file and returns them
         :param max_age: optional, in seconds. If attack is older as this then it is ignored
+        :param skip_scanning: if set to true then the read content is not analyzed for attacks
         :return: dictionary. Key is the IP that attacked and value is list of dictionaries with data about every attack
         """
         if self.logger is not None:
@@ -93,24 +94,24 @@ class LogParser:
         self._last_bytes['hash'] = md5(content_end.encode('utf8')).hexdigest()
         self._last_bytes['len'] = len(content_end)
 
-        if self.logger is not None:
-            self.logger.debug('new part: "%s"' % new_content.replace('\n', '\\n'))
-
         log_lines = new_content.splitlines()
         del new_content, content_end
 
-        for log_line in log_lines:
-            for rule in self.rules:
-                variables = rule.get_variables(log_line)
-                if variables is not None:
-                    if max_age is not None and time.time() - max_age > variables['TIMESTAMP']:
+        if not skip_scanning:
+            for log_line in log_lines:
+                if self.logger is not None:
+                    self.logger.debug('log line "%s"' % log_line.replace('\n', '\\n'))
+                for rule in self.rules:
+                    variables = rule.get_variables(log_line)
+                    if variables is not None:
+                        if max_age is not None and time.time() - max_age > variables['TIMESTAMP']:
+                            break
+                        attacker_ip = variables['IP']
+                        del variables['IP']
+                        item = attacks.get(attacker_ip, [])
+                        item.append(variables)
+                        attacks[attacker_ip] = item
                         break
-                    attacker_ip = variables['IP']
-                    del variables['IP']
-                    item = attacks.get(attacker_ip, [])
-                    item.append(variables)
-                    attacks[attacker_ip] = item
-                    break
 
         self._last_file_modification_date = curr_file_modification_time
         self._last_file_size = curr_file_size
@@ -126,18 +127,20 @@ class LogParser:
 
         return attacks
 
-    def get_habitual_offenders(self, min_attack_attempts, attack_attempts_time, max_age=None, attacks=None):
-        # type: (int, int, int, dict) -> dict
+    def get_habitual_offenders(self, min_attack_attempts, attack_attempts_time, max_age=None, attacks=None,
+                               first_load=False):
+        # type: (int, int, int, dict, bool) -> dict
         """
         Finds IPs that had performed more than allowed number of attacks in specified time range
         :param min_attack_attempts: minimum allowed number of attacks in time range to be included
         :param attack_attempts_time:  the time range in which all of the attacks must have occurred in seconds
         :param max_age: optional, in seconds. If attack is older as this then it is ignored
         :param attacks: optional. If None, then the value of self.parse_attacks(max_age) is used
+        :param first_load: If true, then the log file is read only, not scanned for attacks
         :return: dictionary. Key is the IP that attacked more or equal than min_attack_attempts times and
         value is list of dictionaries with data about every attack in specified time range
         """
-        attacks = self.parse_attacks(max_age) if attacks is None else attacks
+        attacks = self.parse_attacks(max_age, first_load) if attacks is None else attacks
         habitual_offenders = {}
 
         for ip, attack_list in attacks.items():
