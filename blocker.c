@@ -49,6 +49,24 @@ void check_requirements() {
     }
 }
 
+int check_ip_valid(const char *ip) {
+    const size_t len = strlen(ip);
+    for (size_t i = 0; i < len; i++) {
+        const char ch = ip[i];
+        if (ch == '.' || ch == ':' || ch == '[' || ch == ']') {
+            continue;
+        }
+
+        if (('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') || ('0' <= ch && ch <= '9')) {
+            continue;
+        }
+
+        return 0;
+    }
+
+    return 1;
+}
+
 int check_user_valid(){
     uid_t uid;
     struct passwd *udetails;
@@ -100,20 +118,34 @@ int main(int argc, char **argv){
         help(0);
     }
     if (!strcmp("block", argv[indexCommand])){
+        const char *ip = argv[indexIp];
+
+        if (!check_ip_valid(ip)) {
+            printf("this IP is invalid (%s)\n", ip);
+            exit(1);
+        }
+
         if (is_already_blocked(argv)) {
             printf("this IP is already blocked\n");
             exit(0);
         }
 
         printf("blocking %s\n", argv[indexIp]);
-        char command[] = "ipset add simpleguardian %s > /dev/null 2>&1";
-        char *command_formatted = (char*)malloc(50 + sizeof(command) + sizeof(argv[indexIp]));
-        sprintf(command_formatted, command, argv[indexIp]);
+        char command[] = "ipset add simpleguardian '%s' > /dev/null 2>&1";
+        char *command_formatted = (char*)malloc(50 + strlen(command) + strlen(ip));
+        sprintf(command_formatted, command, ip);
 
         system(command_formatted);
 
         exit(0);
     } else if (!strcmp("unblock", argv[indexCommand])){
+        const char *ip = argv[indexIp];
+
+        if (!check_ip_valid(ip)) {
+            printf("this IP is invalid (%s)\n", ip);
+            exit(1);
+        }
+
         if (!is_already_blocked(argv)) {
             printf("this IP is not blocked\n");
             exit(0);
@@ -121,9 +153,9 @@ int main(int argc, char **argv){
 
         printf("unblocking %s\n", argv[indexIp]);
 
-        char command[] = "ipset del simpleguardian %s > /dev/null 2>&1";
-        char *command_formatted = (char*)malloc(50 + sizeof(command) + sizeof(argv[indexIp]));
-        sprintf(command_formatted, command, argv[indexIp]);
+        char command[] = "ipset del simpleguardian '%s' > /dev/null 2>&1";
+        char *command_formatted = (char*)malloc(50 + strlen(command) + strlen(ip));
+        sprintf(command_formatted, command, ip);
 
         system(command_formatted);
 
